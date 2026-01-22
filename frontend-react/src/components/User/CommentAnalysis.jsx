@@ -10,7 +10,9 @@ export default function CommentAnalysis() {
   const queryClient = useQueryClient()
 
   const analysisMutation = useMutation(
-    (commentData) => analysisService.analyzeComment(commentData.commentId),
+    //윤혜정
+    (textData) => analysisService.analyzeText(textData.text),
+    // (commentData) => analysisService.analyzeComment(commentData.commentId),
     {
       onSuccess: (data) => {
         setResult(data)
@@ -23,7 +25,9 @@ export default function CommentAnalysis() {
     if (!text.trim()) return
     
     // Mock comment ID - 실제로는 댓글 ID를 받아야 함
-    analysisMutation.mutate({ commentId: Date.now() })
+    //analysisMutation.mutate({ commentId: Date.now() })
+    //윤혜정
+    analysisMutation.mutate({ text: text.trim() })  // text 전달
   }
 
   return (

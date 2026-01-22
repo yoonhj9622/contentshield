@@ -1,6 +1,9 @@
 /** [File: DashboardV2.jsx / Date: 2026-01-22 / 설명: 대시보드 실시간 통계 데이터 연동 로직 복구 및 UI 레이아웃 수정] */
 /** [File: DashboardV2.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 적용 및 30초 간격 실시간 데이터 자동 갱신(setInterval) 로직 추가] */
+/** [File: DashboardV2.jsx / Date: 2026-01-22 / 작성자: 윤혜정 / 설명: AI 분석 연동 및 프로필 관리 기능 추가] */
 import React, { useState, useEffect } from 'react';
+import { userService } from '../../services/userService';
+import { analysisService } from '../../services/analysisService';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
@@ -235,15 +238,66 @@ function BlacklistView() {
 }
 
 // --- [3. AI Analysis View] ---
+// function CommentAnalysisView() {
+//   const [text, setText] = useState('');
+//   return (
+//     <div className="max-w-3xl mx-auto space-y-8 animate-in zoom-in-95 duration-500">
+//       <div className="text-center space-y-2">
+//         <div className="inline-flex p-3 rounded-2xl bg-blue-600/10 text-blue-500 mb-2"><Search size={32} /></div>
+//         <h2 className="text-3xl font-black text-white">AI Content Analysis</h2>
+//         <p className="text-slate-500">문장의 맥락을 분석하여 유해성을 판별합니다.</p>
+//       </div>
+//       <Card className="border-blue-900/30 bg-slate-900/80 backdrop-blur">
+//         <CardContent className="p-8 space-y-6">
+//           <Textarea 
+//             placeholder="분석할 댓글이나 문장을 입력하세요..." 
+//             value={text} 
+//             onChange={(e)=>setText(e.target.value)} 
+//             className="h-48 bg-slate-950/50 border-slate-800 text-lg p-6" 
+//           />
+//           <Button className="w-full h-14 text-lg font-bold shadow-blue-600/20" variant="primary">
+//             <Sparkles className="mr-2" size={20} /> 실시간 분석하기
+//           </Button>
+//         </CardContent>
+//       </Card>
+//     </div>
+//   );
+// }
+
+// --- [3. AI Analysis View] 윤혜정---
 function CommentAnalysisView() {
   const [text, setText] = useState('');
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleAnalyze = async () => {
+    if (!text.trim()) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await analysisService.analyzeText(text.trim());
+      setResult(response);
+    } catch (err) {
+      console.error('Analysis error:', err);
+      setError(err.message || '분석 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in zoom-in-95 duration-500">
       <div className="text-center space-y-2">
-        <div className="inline-flex p-3 rounded-2xl bg-blue-600/10 text-blue-500 mb-2"><Search size={32} /></div>
+        <div className="inline-flex p-3 rounded-2xl bg-blue-600/10 text-blue-500 mb-2">
+          <Search size={32} />
+        </div>
         <h2 className="text-3xl font-black text-white">AI Content Analysis</h2>
         <p className="text-slate-500">문장의 맥락을 분석하여 유해성을 판별합니다.</p>
       </div>
+
       <Card className="border-blue-900/30 bg-slate-900/80 backdrop-blur">
         <CardContent className="p-8 space-y-6">
           <Textarea
@@ -252,15 +306,109 @@ function CommentAnalysisView() {
             onChange={(e) => setText(e.target.value)}
             className="h-48 bg-slate-950/50 border-slate-800 text-lg p-6"
           />
-          <Button className="w-full h-14 text-lg font-bold shadow-blue-600/20" variant="primary">
-            <Sparkles className="mr-2" size={20} /> 실시간 분석하기
+          <Button
+            className="w-full h-14 text-lg font-bold shadow-blue-600/20"
+            variant="primary"
+            onClick={handleAnalyze}
+            disabled={!text.trim() || loading}
+          >
+            {loading ? (
+              <>분석 중...</>
+            ) : (
+              <><Sparkles className="mr-2" size={20} /> 실시간 분석하기</>
+            )}
           </Button>
         </CardContent>
       </Card>
+
+      {/* Error Display */}
+      {error && (
+        <Card className="border-red-900/50 bg-red-900/10">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle size={24} />
+              <p>{error}</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Results Display */}
+      {result && (
+        <Card className="border-slate-700">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-3">
+              {result.is_malicious ? (
+                <><AlertTriangle className="text-red-500" /> 악성 콘텐츠 감지</>
+              ) : (
+                <><CheckCircle className="text-emerald-500" /> 안전한 콘텐츠</>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Category */}
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500">카테고리:</span>
+              <span className="px-3 py-1 rounded-full bg-blue-600/20 text-blue-400 text-sm font-bold">
+                {result.category}
+              </span>
+            </div>
+
+            {/* Scores */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <ScoreItem label="유해성" score={result.toxicity_score} />
+              <ScoreItem label="혐오표현" score={result.hate_speech_score} />
+              <ScoreItem label="욕설" score={result.profanity_score} />
+              <ScoreItem label="위협" score={result.threat_score} />
+              <ScoreItem label="폭력성" score={result.violence_score} />
+              <ScoreItem label="신뢰도" score={result.confidence_score} />
+            </div>
+
+            {/* AI Reasoning */}
+            {result.llama_reasoning && (
+              <div className="p-4 rounded-lg bg-slate-950 border border-slate-800">
+                <h4 className="text-sm font-bold text-slate-400 mb-2">AI 분석 의견</h4>
+                <p className="text-slate-300">{result.llama_reasoning}</p>
+              </div>
+            )}
+
+            {/* Detected Keywords */}
+            {result.detected_keywords?.length > 0 && (
+              <div>
+                <h4 className="text-sm font-bold text-slate-400 mb-2">감지된 키워드</h4>
+                <div className="flex flex-wrap gap-2">
+                  {result.detected_keywords.map((kw, idx) => (
+                    <span key={idx} className="px-3 py-1 rounded-full bg-red-900/30 text-red-400 text-sm border border-red-900/50">
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
+// Score Item Component
+function ScoreItem({ label, score }) {
+  const percentage = Math.min(Math.max(score || 0, 0), 100);
+  const color = percentage > 70 ? 'bg-red-500' : percentage > 40 ? 'bg-yellow-500' : 'bg-emerald-500';
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between text-sm">
+        <span className="text-slate-400">{label}</span>
+        <span className="font-bold text-white">{percentage.toFixed(1)}%</span>
+      </div>
+      <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+        <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }} />
+      </div>
+    </div>
+  );
+}
 // --- [4. Template View] ---
 function TemplateView() {
   const templates = [
@@ -305,8 +453,197 @@ function StatCard({ title, value, icon: Icon, color }) {
   );
 }
 
+// 윤혜정--- [8. Profile View] ---
+function ProfileView() {
+  const [userInfo, setUserInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // 비밀번호 변경 상태
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMessage, setPasswordMessage] = useState(null);
+
+  useEffect(() => {
+    loadUserInfo();
+  }, []);
+
+  const loadUserInfo = async () => {
+    try {
+      setLoading(true);
+      const data = await userService.getUserInfo();
+      setUserInfo(data);
+    } catch (err) {
+      console.error('Failed to load user info:', err);
+      setError('사용자 정보를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (newPassword !== confirmPassword) {
+      setPasswordMessage({ type: 'error', text: '새 비밀번호가 일치하지 않습니다.' });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordMessage({ type: 'error', text: '비밀번호는 6자 이상이어야 합니다.' });
+      return;
+    }
+
+    try {
+      await userService.changePassword(currentPassword, newPassword);
+      setPasswordMessage({ type: 'success', text: '비밀번호가 변경되었습니다.' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordForm(false);
+    } catch (err) {
+      setPasswordMessage({ type: 'error', text: err.response?.data?.error || '비밀번호 변경에 실패했습니다.' });
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    return new Date(dateString).toLocaleString('ko-KR');
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-slate-400">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-red-400">{error}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500">
+      <div>
+        <h2 className="text-2xl font-bold text-white">Profile Settings</h2>
+        <p className="text-slate-500 text-sm">계정 정보를 확인하고 관리합니다.</p>
+      </div>
+
+      {/* 계정 정보 카드 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User size={20} /> 계정 정보
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InfoItem label="이메일" value={userInfo?.email} />
+            <InfoItem label="사용자명" value={userInfo?.username} />
+            <InfoItem label="역할" value={userInfo?.role === 'ADMIN' ? '관리자' : '일반 사용자'} />
+            <InfoItem label="상태" value={userInfo?.status === 'ACTIVE' ? '활성' : userInfo?.status} />
+            <InfoItem label="가입일" value={formatDate(userInfo?.createdAt)} />
+            <InfoItem label="마지막 로그인" value={formatDate(userInfo?.lastLoginAt)} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 비밀번호 변경 카드 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock size={20} /> 비밀번호 변경
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!showPasswordForm ? (
+            <Button
+              variant="outline"
+              onClick={() => setShowPasswordForm(true)}
+              className="gap-2"
+            >
+              <Lock size={16} /> 비밀번호 변경하기
+            </Button>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">현재 비밀번호</label>
+                <Input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="현재 비밀번호 입력"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">새 비밀번호</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="새 비밀번호 입력"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-1">새 비밀번호 확인</label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="새 비밀번호 다시 입력"
+                />
+              </div>
+
+              {passwordMessage && (
+                <div className={`p-3 rounded-lg text-sm ${passwordMessage.type === 'error'
+                    ? 'bg-red-900/20 text-red-400 border border-red-900/50'
+                    : 'bg-emerald-900/20 text-emerald-400 border border-emerald-900/50'
+                  }`}>
+                  {passwordMessage.text}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button onClick={handlePasswordChange}>
+                  <Save size={16} className="mr-2" /> 변경 저장
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPasswordForm(false);
+                    setPasswordMessage(null);
+                    setCurrentPassword('');
+                    setNewPassword('');
+                    setConfirmPassword('');
+                  }}
+                >
+                  취소
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// 정보 표시 컴포넌트
+function InfoItem({ label, value }) {
+  return (
+    <div className="p-3 rounded-lg bg-slate-950 border border-slate-800">
+      <p className="text-xs text-slate-500 mb-1">{label}</p>
+      <p className="text-slate-200 font-medium">{value || '-'}</p>
+    </div>
+  );
+}
+
 // 나머지 뷰는 위와 동일한 다크 테마 컨셉으로 표시 (생략된 뷰들)
 function WritingAssistantView() { return <div className="text-center p-20 text-slate-500">Writing Assistant Module Loading...</div>; }
 function StatisticsView() { return <div className="text-center p-20 text-slate-500">Advanced Analytics Data Preparing...</div>; }
 function CommentManagementView() { return <div className="text-center p-20 text-slate-500">Comment Feed Synchronizing...</div>; }
-function ProfileView() { return <div className="text-center p-20 text-slate-500">Secure Profile Settings...</div>; }

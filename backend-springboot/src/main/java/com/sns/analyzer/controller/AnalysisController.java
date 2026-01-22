@@ -12,7 +12,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*") 윤혜정
+
 public class AnalysisController {
     
     private final AnalysisService analysisService;
@@ -77,4 +78,30 @@ public class AnalysisController {
             .orElseThrow(() -> new IllegalArgumentException("User not found"));
         return user.getUserId();
     }
+
+    /**윤혜정
+     * 텍스트 직접 분석 (댓글 저장 없이)
+     */
+    @PostMapping("/text")
+    public ResponseEntity<?> analyzeText(
+        Authentication authentication,
+        @RequestBody Map<String, Object> request
+    ) {
+        try {
+            Long userId = getUserId(authentication);
+            String text = (String) request.get("text");
+            
+            if (text == null || text.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Text is required"));
+            }
+            
+            Map<String, Object> result = analysisService.analyzeText(text, userId);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }
+

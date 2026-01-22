@@ -16,4 +16,10 @@ export const analysisService = {
     const response = await api.get('/analysis/stats')
     return response.data
   },
+  // 윤혜정 텍스트 직접 분석 (신규)
+  analyzeText: async (text) => {
+    const response = await api.post('/analysis/text', { text })
+    return response.data
+  },
+  
 }
