@@ -1,3 +1,4 @@
+// [File: App.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 적용]
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
@@ -27,19 +28,24 @@ function App() {
     // bg-gray-50을 지우고 bg-slate-950으로 변경했습니다.
     <div className="min-h-screen bg-slate-950 text-slate-200">
       <Navbar />
-      
+
       <Routes>
         {/* 공공 경로 (로그인/회원가입) */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
-        
+
         {/* 사용자 경로 (모두 통합 대시보드 V2로 연결) */}
         <Route path="/dashboard" element={
           <PrivateRoute>
             <UserDashboard />
           </PrivateRoute>
         } />
-        <Route path="/analysis" element={
+        <Route path="/aianalysis" element={
+          <PrivateRoute>
+            <UserDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/comments" element={
           <PrivateRoute>
             <UserDashboard />
           </PrivateRoute>
@@ -54,12 +60,22 @@ function App() {
             <UserDashboard />
           </PrivateRoute>
         } />
+        <Route path="/aiassistant" element={
+          <PrivateRoute>
+            <UserDashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/templates" element={
+          <PrivateRoute>
+            <UserDashboard />
+          </PrivateRoute>
+        } />
         <Route path="/profile" element={
           <PrivateRoute>
             <UserDashboard />
           </PrivateRoute>
         } />
-        
+
         {/* 관리자 경로 */}
         <Route path="/admin/dashboard" element={
           <PrivateRoute requireAdmin>
@@ -76,7 +92,7 @@ function App() {
             <NoticeManager />
           </PrivateRoute>
         } />
-        
+
         {/* 기본 리다이렉트 설정 */}
         <Route path="/" element={
           user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />

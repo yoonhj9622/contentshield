@@ -1,3 +1,4 @@
+// [File: Navbar.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 연동]
 // ==================== src/components/Layout/Navbar.jsx ====================
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
@@ -40,21 +41,21 @@ export default function Navbar() {
             >
               Dashboard
             </Link>
-            
+
             <Link
-              to="/analysis"
+              to="/aianalysis"
               className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
             >
               Analysis
             </Link>
-            
+
             <Link
               to="/statistics"
               className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
             >
               Statistics
             </Link>
-            
+
             <Link
               to="/blacklist"
               className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
@@ -92,7 +93,7 @@ export default function Navbar() {
                     <Settings className="h-4 w-4 mr-2" />
                     Profile Settings
                   </Link>
-                  
+
                   <button
                     onClick={handleLogout}
                     className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

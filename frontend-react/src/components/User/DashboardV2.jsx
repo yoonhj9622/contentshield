@@ -1,4 +1,5 @@
 /** [File: DashboardV2.jsx / Date: 2026-01-22 / 설명: 대시보드 실시간 통계 데이터 연동 로직 복구 및 UI 레이아웃 수정] */
+/** [File: DashboardV2.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 및 사이드바 내비게이션 적용] */
 import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -9,6 +10,7 @@ import {
   Wand2, Copy, RotateCcw, Sparkles, UserX, Search, MessageSquare,
   User, Activity, Bell, Lock, Save, Send, Lightbulb
 } from 'lucide-react';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import dashboardService from '../../services/dashboardService';
 
 // --- [다크 모드 전용 UI 부품] ---
@@ -34,18 +36,22 @@ const Textarea = (props) => <textarea className="flex min-h-[80px] w-full rounde
 
 // --- [메인 컴포넌트] ---
 export default function DashboardV2() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Shield },
-    { id: 'analysis', label: 'AI Analysis', icon: Search },
-    { id: 'management', label: 'Comments', icon: MessageSquare },
-    { id: 'blacklist', label: 'Blacklist', icon: UserX },
-    { id: 'writing', label: 'AI Assistant', icon: Wand2 },
-    { id: 'templates', label: 'Templates', icon: FileText },
-    { id: 'stats', label: 'Statistics', icon: Activity },
-    { id: 'profile', label: 'Profile', icon: User },
+    { id: 'dashboard', label: 'Dashboard', icon: Shield, path: '/dashboard' },
+    { id: 'analysis', label: 'AI Analysis', icon: Search, path: '/aianalysis' },
+    { id: 'management', label: 'Comments', icon: MessageSquare, path: '/comments' },
+    { id: 'blacklist', label: 'Blacklist', icon: UserX, path: '/blacklist' },
+    { id: 'writing', label: 'AI Assistant', icon: Wand2, path: '/aiassistant' },
+    { id: 'templates', label: 'Templates', icon: FileText, path: '/templates' },
+    { id: 'stats', label: 'Statistics', icon: Activity, path: '/statistics' },
+    { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
   ];
+
+  // URL 경로에 따라 activeTab 결정
+  const activeTab = menuItems.find(item => item.path === pathname)?.id || 'dashboard';
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-200 font-sans">
@@ -58,9 +64,9 @@ export default function DashboardV2() {
         </div>
         <nav className="px-4 space-y-2">
           {menuItems.map(item => (
-            <button
+            <RouterLink
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              to={item.path}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${activeTab === item.id
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                 : 'text-slate-500 hover:bg-slate-800 hover:text-slate-200'
@@ -68,7 +74,7 @@ export default function DashboardV2() {
             >
               <item.icon size={20} strokeWidth={activeTab === item.id ? 2.5 : 2} />
               {item.label}
-            </button>
+            </RouterLink>
           ))}
         </nav>
       </aside>
