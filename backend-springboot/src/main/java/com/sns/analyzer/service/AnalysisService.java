@@ -166,4 +166,18 @@ public class AnalysisService {
             return 0;
         }
     }
+
+    /**윤혜정
+     * 텍스트 직접 분석 (DB 저장 없이)
+     */
+    public Map<String, Object> analyzeText(String text, Long userId) {
+        // AI 서비스 호출
+        Map<String, Object> aiResult = callAIService(text);
+        
+        // 응답에 추가 정보 포함
+        aiResult.put("userId", userId);
+        aiResult.put("analyzedText", text);
+        
+        return aiResult;
+    }
 }

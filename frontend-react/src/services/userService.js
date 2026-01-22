@@ -2,6 +2,12 @@
 import api from './api'
 
 export const userService = {
+  // 사용자 계정 정보 조회 (신규 추가)
+  getUserInfo: async () => {
+    const response = await api.get('/user/info')
+    return response.data
+  },
+
   getProfile: async () => {
     const response = await api.get('/user/profile')
     return response.data

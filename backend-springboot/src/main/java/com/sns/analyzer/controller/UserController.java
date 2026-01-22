@@ -7,14 +7,43 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
+import java.util.HashMap;
 
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
+// @CrossOrigin(origins = "*")  ← 삭제!
 public class UserController {
     
     private final UserService userService;
+    
+    /**
+     * 사용자 계정 정보 조회 (신규 추가)
+     */
+    @GetMapping("/info")
+    public ResponseEntity<?> getUserInfo(Authentication authentication) {
+        try {
+            Long userId = getUserIdFromAuth(authentication);
+            
+            User user = userService.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+            
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("userId", user.getUserId());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("username", user.getUsername());
+            userInfo.put("role", user.getRole().toString());
+            userInfo.put("status", user.getStatus().toString());
+            userInfo.put("createdAt", user.getCreatedAt());
+            userInfo.put("lastLoginAt", user.getLastLoginAt());
+            userInfo.put("isSuspended", user.getIsSuspended());
+            
+            return ResponseEntity.ok(userInfo);
+            
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
     
     /**
      * 사용자 프로필 조회
