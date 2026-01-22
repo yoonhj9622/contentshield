@@ -1,5 +1,5 @@
 /** [File: DashboardV2.jsx / Date: 2026-01-22 / 설명: 대시보드 실시간 통계 데이터 연동 로직 복구 및 UI 레이아웃 수정] */
-/** [File: DashboardV2.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 및 사이드바 내비게이션 적용] */
+/** [File: DashboardV2.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 적용 및 30초 간격 실시간 데이터 자동 갱신(setInterval) 로직 추가] */
 import React, { useState, useEffect } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -119,7 +119,18 @@ function DashboardView() {
         setLoading(false);
       }
     };
+
+    // 최초 로드 시 실행
     fetchStats();
+
+    // 30초마다 실시간 데이터 갱신 (setInterval 추가)
+    const interval = setInterval(() => {
+      console.log("[DEBUG] 실시간 데이터 새로고침 중...");
+      fetchStats();
+    }, 30000);
+
+    // 컴포넌트 언마운트 시 인터벌 제거 (Cleanup)
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) return <div className="text-center p-20 text-slate-500 text-sm animate-pulse">데이터를 불러오는 중...</div>;
