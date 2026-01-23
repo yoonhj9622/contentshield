@@ -666,6 +666,7 @@ async def crawl_youtube(request: YoutubeCrawlRequest):
 
                 
             comments.append({
+                "external_id": comment.get('cid', ''),
                 "author": comment.get('author', 'Unknown'),
                 "text": comment.get('text', ''),
                 "publish_date": comment.get('time', ''),

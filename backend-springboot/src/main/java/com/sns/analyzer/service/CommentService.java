@@ -42,10 +42,18 @@ public class CommentService {
             try {
                 String text = (String) c.get("text");
                 String author = (String) c.get("author");
+                String externalId = (String) c.get("external_id");
                 // String publishDate = (String) c.get("publish_date");
 
                 if (text == null || text.trim().isEmpty())
                     continue;
+
+                // 중복 체크: 이미 저장된 댓글이면 건너뜀
+                if (externalId != null && !externalId.isEmpty()
+                        && commentRepository.existsByExternalCommentId(externalId)) {
+                    System.out.println("[DEBUG] Skipping existing comment: " + externalId);
+                    continue;
+                }
 
                 // 댓글 저장
                 Comment comment = Comment.builder()
@@ -54,7 +62,8 @@ public class CommentService {
                         .contentUrl(url)
                         .authorName(author) // 필수 필드 설정
                         .authorIdentifier(author)
-                        .externalCommentId(UUID.randomUUID().toString()) // 필수 필드 임시 생성
+                        .externalCommentId(
+                                externalId != null && !externalId.isEmpty() ? externalId : UUID.randomUUID().toString())
                         .commentText(text)
                         .commentedAt(LocalDateTime.now().withNano(0)) // 날짜 절삭
                         .isAnalyzed(false)

@@ -17,6 +17,8 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
 
     List<Comment> findByExternalCommentId(String externalCommentId);
 
+    boolean existsByExternalCommentId(String externalCommentId);
+
     List<Comment> findByIsAnalyzed(Boolean isAnalyzed);
 
     List<Comment> findByIsMalicious(Boolean isMalicious);
