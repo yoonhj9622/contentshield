@@ -3,7 +3,7 @@
 /** [File: DashboardV2.jsx / Date: 2026-01-22 / 작성자: 윤혜정 / 설명: AI 분석 연동 및 프로필 관리 기능 추가] */
 import React, { useState, useEffect } from 'react';
 import { userService } from '../../services/userService';
-import { analysisService } from '../../services/analysisService';
+import analysisService from '../../services/analysisService';
 import { commentService } from '../../services/commentService';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,7 +16,8 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import dashboardService from '../../services/dashboardService';
-import ProfileSettings from './ProfileSettings'; // ⭐ 알림 설정이 포함된 ProfileSettings 컴포넌트
+import ProfileSettings from './ProfileSettings';
+import TemplateManager from './TemplateManager';
 
 // --- [다크 모드 전용 UI 부품] ---
 const Card = ({ children, className = "" }) => (
@@ -91,7 +92,7 @@ export default function DashboardV2() {
           {activeTab === 'analysis' && <CommentAnalysisView />}
           {activeTab === 'management' && <CommentManagementView />}
           {activeTab === 'blacklist' && <BlacklistView />}
-          {activeTab === 'writing' && <WritingAssistantView />}
+          {activeTab === 'writing' && <TemplateManager />}
           {activeTab === 'templates' && <TemplateView />}
           {activeTab === 'stats' && <StatisticsView />}
           {activeTab === 'profile' && <ProfileSettings />}
@@ -411,7 +412,8 @@ function ScoreItem({ label, score }) {
     </div>
   );
 }
-// --- [4. Template View] ---
+
+// --- [4. Template View (Legacy for HEAD compatibility)] ---
 function TemplateView() {
   const templates = [
     { id: 1, name: 'Welcome Message', category: 'General', content: '방문해주셔서 감사합니다! 긍정적인 커뮤니티를 함께 만들어요.' },
@@ -646,7 +648,9 @@ function InfoItem({ label, value }) {
 }
 
 // 나머지 뷰는 위와 동일한 다크 테마 컨셉으로 표시 (생략된 뷰들)
-function WritingAssistantView() { return <div className="text-center p-20 text-slate-500">Writing Assistant Module Loading...</div>; }
+function WritingAssistantView() {
+  return <TemplateManager />;
+}
 function StatisticsView() { return <div className="text-center p-20 text-slate-500">Advanced Analytics Data Preparing...</div>; }
 // --- [5. Comment Management View] ---
 function CommentManagementView() {

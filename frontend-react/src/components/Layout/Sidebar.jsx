@@ -1,13 +1,12 @@
 // ==================== src/components/Layout/Sidebar.jsx ====================
 import { Link, useLocation } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  FileSearch, 
-  BarChart3, 
-  UserX, 
+import {
+  LayoutDashboard,
+  FileSearch,
+  BarChart3,
+  UserX,
   Settings,
-  MessageSquare,
-  Lightbulb,
+  Wand2,
   Users,
   Bell,
   FileText
@@ -18,15 +17,14 @@ export default function Sidebar() {
   const location = useLocation()
   const { user } = useAuthStore()
 
-  const isActive = (path) => {
-    return location.pathname === path
-  }
+  const isActive = (path) => location.pathname === path
 
   const linkClass = (path) => {
-    const base = "flex items-center px-4 py-3 text-sm font-medium transition-colors"
+    const base =
+      'flex items-center px-4 py-3 text-sm font-medium transition-all rounded-lg'
     return isActive(path)
-      ? `${base} bg-primary-50 text-primary-700 border-r-4 border-primary-600`
-      : `${base} text-gray-700 hover:bg-gray-50`
+      ? `${base} bg-primary-600/20 text-primary-400`
+      : `${base} text-slate-400 hover:bg-white/5 hover:text-slate-200`
   }
 
   const userLinks = [
@@ -34,8 +32,10 @@ export default function Sidebar() {
     { path: '/analysis', icon: FileSearch, label: 'Comment Analysis' },
     { path: '/statistics', icon: BarChart3, label: 'Statistics' },
     { path: '/blacklist', icon: UserX, label: 'Blacklist Manager' },
-    { path: '/templates', icon: MessageSquare, label: 'Templates' },
-    { path: '/suggestions', icon: Lightbulb, label: 'Suggestions' },
+
+    // ✅ TemplateManager 연결
+    { path: '/writing', icon: Wand2, label: 'AI Writing Assistant' },
+
     { path: '/profile', icon: Settings, label: 'Settings' },
   ]
 
@@ -47,15 +47,16 @@ export default function Sidebar() {
   ]
 
   return (
-    <div className="w-64 bg-white h-screen border-r overflow-y-auto">
-      <div className="py-4">
-        {/* User Navigation */}
-        <div className="px-4 mb-2">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+    <div className="w-64 bg-slate-950 h-screen border-r border-white/10">
+      <div className="py-6 px-3">
+
+        {/* User Menu */}
+        <div className="px-3 mb-3">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
             User Menu
           </h3>
         </div>
-        
+
         <nav className="space-y-1">
           {userLinks.map((link) => (
             <Link
@@ -69,15 +70,15 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        {/* Admin Navigation */}
+        {/* Admin Menu */}
         {user?.role === 'ADMIN' && (
           <>
-            <div className="px-4 mt-6 mb-2">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <div className="px-3 mt-8 mb-3">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Admin Menu
               </h3>
             </div>
-            
+
             <nav className="space-y-1">
               {adminLinks.map((link) => (
                 <Link

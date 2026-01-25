@@ -1,6 +1,7 @@
 """
 SNS Content Analyzer - Groq Dual Model Edition
 Llama-Guard-4-12b (필터링) + Llama-3.1-8b-instant (분석)
++ AI Writing Assistant 기능 추가
 """
 
 from fastapi import FastAPI, HTTPException
@@ -14,10 +15,14 @@ import httpx
 import json
 import re
 import asyncio
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # ✨ 추가
 
-# .env 파일 로드
+# ✨ .env 파일 로드
 load_dotenv()
+
+# API 키 로드 확인
+api_key_loaded = bool(os.getenv("GROQ_API_KEY"))
+print(f"GROQ_API_KEY loaded: {api_key_loaded}")
 
 # 로깅 설정
 logging.basicConfig(
@@ -28,9 +33,9 @@ logger = logging.getLogger(__name__)
 
 # FastAPI 앱 생성
 app = FastAPI(
-    title="SNS Content Analyzer - Groq Dual Model",
-    description="Llama Guard 4 + Llama 3.1 듀얼 모델 악성 콘텐츠 탐지",
-    version="3.0.0"
+    title="SNS Content Analyzer - Groq Dual Model + AI Assistant",
+    description="Llama Guard 4 + Llama 3.1 듀얼 모델 악성 콘텐츠 탐지 + AI 작성 보조",
+    version="3.1.0"
 )
 
 # CORS 설정
@@ -42,7 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==================== 데이터 모델 ====================
+# ==================== 기존 데이터 모델 ====================
 
 class TextAnalysisRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=10000)
@@ -74,7 +79,66 @@ class AnalysisResponse(BaseModel):
     analyzed_at: str
 
 
-# ==================== Groq Dual Model Analyzer ====================
+# ==================== 🆕 AI Assistant 데이터 모델 ====================
+
+class AssistantAnalyzeRequest(BaseModel):
+    """원본 텍스트 분석 요청"""
+    text: str = Field(..., min_length=1, max_length=10000)
+    language: str = Field(default="ko")
+
+
+class AssistantImproveRequest(BaseModel):
+    """텍스트 개선 요청"""
+    text: str = Field(..., min_length=1, max_length=10000)
+    tone: str = Field(default="polite", description="polite, neutral, friendly, formal, casual")
+    language: str = Field(default="ko")
+    instruction: Optional[str] = Field(default=None, description="추가 지시사항")
+
+
+class AssistantReplyRequest(BaseModel):
+    """댓글 답변 생성 요청"""
+    original_comment: str = Field(..., min_length=1, max_length=1000)
+    context: Optional[str] = Field(default=None, description="영상/게시글 내용")
+    reply_type: str = Field(default="constructive", description="constructive, grateful, apologetic, defensive")
+    language: str = Field(default="ko")
+
+
+class AssistantTemplateRequest(BaseModel):
+    """상황별 템플릿 생성 요청"""
+    situation: str = Field(..., description="promotion, announcement, apology, explanation, feedback_request")
+    topic: Optional[str] = Field(default=None, description="주제/상황 설명")
+    tone: str = Field(default="professional")
+    language: str = Field(default="ko")
+
+
+class QuickAnalysis(BaseModel):
+    """간단 분석 결과"""
+    emotion_tone: str  # "긍정적", "중립적", "부정적"
+    risk_level: str    # "안전", "주의", "위험"
+    has_profanity: bool
+    has_aggression: bool
+    misunderstanding_risk: str  # "없음", "낮음", "있음", "높음"
+
+
+class SuggestionOption(BaseModel):
+    """AI 제안 옵션"""
+    version: int
+    text: str
+    tone: str
+    reasoning: str
+    confidence: float
+
+
+class AssistantResponse(BaseModel):
+    """AI Assistant 통합 응답"""
+    success: bool
+    analysis: Optional[QuickAnalysis] = None
+    suggestions: List[SuggestionOption] = []
+    processing_time_ms: float
+    model_used: str
+
+
+# ==================== 기존 Groq Dual Model Analyzer (유지) ====================
 
 class GroqDualModelAnalyzer:
     """Llama Guard 4 + Llama 3.1 듀얼 모델 분석 서비스"""
@@ -92,25 +156,25 @@ class GroqDualModelAnalyzer:
         
         # 모델 설정
         self.models = {
-            "guard": "llama-guard-3-8b",  # Llama Guard 4가 아직 없으면 3 사용
+            "guard": "llama-guard-3-8b",
             "analysis": "llama-3.1-8b-instant"
         }
         
         # Guard 카테고리 매핑
         self.guard_categories = {
-            "S1": "violent_crimes",      # 폭력 범죄
-            "S2": "non_violent_crimes",  # 비폭력 범죄
-            "S3": "sex_related_crimes",  # 성범죄
-            "S4": "child_exploitation",  # 아동 착취
-            "S5": "defamation",          # 명예훼손
-            "S6": "specialized_advice",  # 전문적 조언
-            "S7": "privacy",             # 프라이버시 침해
-            "S8": "intellectual_property", # 지적재산권
-            "S9": "indiscriminate_weapons", # 무차별 무기
-            "S10": "hate",               # 혐오 표현
-            "S11": "self_harm",          # 자해
-            "S12": "sexual_content",     # 성적 콘텐츠
-            "S13": "elections"           # 선거 관련
+            "S1": "violent_crimes",
+            "S2": "non_violent_crimes",
+            "S3": "sex_related_crimes",
+            "S4": "child_exploitation",
+            "S5": "defamation",
+            "S6": "specialized_advice",
+            "S7": "privacy",
+            "S8": "intellectual_property",
+            "S9": "indiscriminate_weapons",
+            "S10": "hate",
+            "S11": "self_harm",
+            "S12": "sexual_content",
+            "S13": "elections"
         }
         
         # 규칙 기반 차단 단어
@@ -139,17 +203,17 @@ class GroqDualModelAnalyzer:
         start_time = time.time()
         
         try:
-            # 1. 규칙 기반 필터링 (빠른 체크)
+            # 1. 규칙 기반 필터링
             rule_result = self._rule_based_filter(text, language)
             
             if not self.api_key:
                 logger.warning("No API key, using fallback")
                 result = self._create_fallback_response(text, rule_result)
             elif use_dual_model:
-                # 2. 듀얼 모델 분석 (Guard + Llama 3.1)
+                # 2. 듀얼 모델 분석
                 result = await self._dual_model_analysis(text, language, rule_result)
             else:
-                # 3. 단일 모델 분석 (Llama 3.1만)
+                # 3. 단일 모델 분석
                 result = await self._single_model_analysis(text, language, rule_result)
             
             processing_time = (time.time() - start_time) * 1000
@@ -171,7 +235,6 @@ class GroqDualModelAnalyzer:
     ) -> Dict[str, Any]:
         """듀얼 모델 분석 (Guard + Llama 3.1 병렬 실행)"""
         try:
-            # 병렬 실행으로 속도 향상
             guard_task = self._llama_guard_check(text, language)
             llama_task = self._llama_analysis(text, language)
             
@@ -181,7 +244,6 @@ class GroqDualModelAnalyzer:
                 return_exceptions=True
             )
             
-            # 에러 처리
             if isinstance(guard_result, Exception):
                 logger.error(f"Guard model failed: {guard_result}")
                 guard_result = self._fallback_guard_result()
@@ -190,7 +252,6 @@ class GroqDualModelAnalyzer:
                 logger.error(f"Llama model failed: {llama_result}")
                 llama_result = self._fallback_analysis(text)
             
-            # 결과 통합
             combined = self._combine_dual_results(
                 rule_result,
                 guard_result,
@@ -206,7 +267,6 @@ class GroqDualModelAnalyzer:
     async def _llama_guard_check(self, text: str, language: str) -> Dict[str, Any]:
         """Llama Guard 4 안전성 검사"""
         try:
-            # Guard 프롬프트 (공식 포맷)
             prompt = f"""[INST] Task: Check if there is unsafe content in 'User' messages in conversations according our safety policy with the below categories.
 
 <BEGIN UNSAFE CONTENT CATEGORIES>
@@ -254,12 +314,10 @@ Provide your safety assessment for User's message:
                 result = response.json()
                 content = result["choices"][0]["message"]["content"].strip()
                 
-                # Guard 결과 파싱
                 is_safe = content.lower().startswith("safe")
                 violated_categories = []
                 
                 if not is_safe:
-                    # S1, S2 등 카테고리 추출
                     categories = re.findall(r'S\d+', content)
                     violated_categories = [
                         self.guard_categories.get(cat, cat) 
@@ -323,7 +381,6 @@ Respond in valid JSON format only, no markdown:
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
                 
-                # JSON 추출
                 json_result = self._extract_json(content)
                 
                 if json_result:
@@ -387,12 +444,10 @@ Respond in valid JSON format only, no markdown:
     ) -> Dict[str, Any]:
         """듀얼 모델 결과 통합"""
         
-        # Guard 결과 반영
         guard_boost = 0
         if not guard_result.get("is_safe", True):
-            guard_boost = 30  # Guard가 unsafe 판정 시 점수 상향
+            guard_boost = 30
         
-        # 가중 평균
         weight_rule = 0.15
         weight_guard = 0.35
         weight_llama = 0.50
@@ -409,7 +464,6 @@ Respond in valid JSON format only, no markdown:
         violence = llama_result.get("violence_score", 0)
         sexual = llama_result.get("sexual_score", 0)
         
-        # Guard의 카테고리에 따라 점수 조정
         violated_cats = guard_result.get("violated_categories", [])
         if "hate" in violated_cats:
             hate_speech = max(hate_speech, 80)
@@ -418,7 +472,6 @@ Respond in valid JSON format only, no markdown:
         if "sexual_content" in violated_cats:
             sexual = max(sexual, 85)
         
-        # 악성 여부 판단
         is_malicious = (
             toxicity > 50.0 or
             hate_speech > 60.0 or
@@ -430,7 +483,6 @@ Respond in valid JSON format only, no markdown:
             rule_result["is_malicious_rule"]
         )
         
-        # 카테고리 결정
         if violence > 70:
             category = "violence"
         elif sexual > 70:
@@ -448,7 +500,6 @@ Respond in valid JSON format only, no markdown:
         else:
             category = "safe"
         
-        # 신뢰도 계산
         confidence = 95.0 if guard_result.get("guard_success") and llama_result.get("llama_success") else 70.0
         
         return {
@@ -542,34 +593,582 @@ Respond in valid JSON format only, no markdown:
         }
     
     def _extract_json(self, text: str) -> Optional[Dict]:
-        """JSON 추출"""
+        """JSON 추출 (Groq 응답 전용)"""
         try:
-            json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group(0))
-            return json.loads(text)
-        except:
+            # 1. Markdown 코드 블록 제거
+            text = re.sub(r'```json\s*', '', text)
+            text = re.sub(r'\s*```', '', text)
+            text = text.strip()
+
+            # 2. 직접 파싱 시도
+            try:
+                result = json.loads(text)
+                logger.info(f"✅ JSON 직접 파싱 성공: {len(result.get('suggestions', []))}개 제안")
+                return result
+            except json.JSONDecodeError as e:
+                logger.warning(f"⚠️ 직접 파싱 실패: {e}")
+        
+            # 3. 가장 큰 JSON 객체 찾기 (중첩 구조 지원)
+            max_json = None
+            max_length = 0
+        
+            # 모든 { 위치 찾기
+            for i in range(len(text)):
+                if text[i] == '{':
+                    # 이 위치에서 시작하는 완전한 JSON 찾기
+                    depth = 0
+                    for j in range(i, len(text)):
+                        if text[j] == '{':
+                            depth += 1
+                        elif text[j] == '}':
+                            depth -= 1
+                            if depth == 0:
+                                # 완전한 JSON 발견
+                                json_str = text[i:j+1]
+                                try:
+                                    parsed = json.loads(json_str)
+                                    if len(json_str) > max_length:
+                                        max_json = parsed
+                                        max_length = len(json_str)
+                                except:
+                                    pass
+                                break
+        
+            if max_json:
+                logger.info(f"✅ 중괄호 매칭으로 파싱 성공: {len(max_json.get('suggestions', []))}개 제안")
+                return max_json
+        
+            logger.error(f"❌ JSON 파싱 실패 - 전체 텍스트 길이: {len(text)}")
+            logger.error(f"❌ 텍스트 시작 부분: {text[:500]}")
             return None
+        
+        except Exception as e:
+            logger.error(f"❌ JSON 파싱 예외: {e}")
+            return None
+
+# ==================== 🆕 AI Writing Assistant Service ====================
+
+class AIWritingAssistant:
+    """AI 작성 보조 서비스 (Llama 3.1 기반)"""
+    
+    def __init__(self, analyzer: GroqDualModelAnalyzer):
+        self.analyzer = analyzer
+        self.api_key = analyzer.api_key
+        self.base_url = analyzer.base_url
+        self.model = analyzer.models["analysis"]  # Llama-3.1-8b-instant
+        
+        # 톤 앤 매너 한국어 매핑
+        self.tone_mapping = {
+            "polite": "공손하고 정중한",
+            "neutral": "중립적이고 객관적인",
+            "friendly": "친근하고 따뜻한",
+            "formal": "격식있고 전문적인",
+            "casual": "편안하고 자연스러운"
+        }
+        
+        # 상황별 프롬프트 템플릿
+        self.situation_templates = {
+            "promotion": "홍보/마케팅 게시글",
+            "announcement": "팬 공지/안내 메시지",
+            "apology": "사과 및 해명",
+            "explanation": "상황 설명",
+            "feedback_request": "건설적 피드백 요청"
+        }
+        
+        logger.info("AI Writing Assistant initialized")
+    
+    async def quick_analyze(
+        self, 
+        text: str, 
+        language: str = "ko"
+    ) -> QuickAnalysis:
+        """빠른 감정/위험도 분석"""
+        try:
+            # 기존 analyzer 활용 (Guard + Llama 3.1)
+            analysis_result = await self.analyzer.analyze_text(text, language, use_dual_model=True)
+            
+            # 감정 톤 판별
+            if analysis_result.toxicity_score > 60:
+                emotion_tone = "부정적"
+            elif analysis_result.toxicity_score < 30:
+                emotion_tone = "긍정적"
+            else:
+                emotion_tone = "중립적"
+            
+            # 위험도 판별
+            if analysis_result.is_malicious or analysis_result.toxicity_score > 70:
+                risk_level = "위험"
+            elif analysis_result.toxicity_score > 40:
+                risk_level = "주의"
+            else:
+                risk_level = "안전"
+            
+            # 오해 가능성 판별
+            if analysis_result.toxicity_score > 50:
+                misunderstanding_risk = "높음"
+            elif analysis_result.toxicity_score > 30:
+                misunderstanding_risk = "있음"
+            elif analysis_result.toxicity_score > 15:
+                misunderstanding_risk = "낮음"
+            else:
+                misunderstanding_risk = "없음"
+            
+            return QuickAnalysis(
+                emotion_tone=emotion_tone,
+                risk_level=risk_level,
+                has_profanity=analysis_result.profanity_score > 60,
+                has_aggression=analysis_result.threat_score > 50 or analysis_result.violence_score > 50,
+                misunderstanding_risk=misunderstanding_risk
+            )
+            
+        except Exception as e:
+            logger.error(f"Quick analysis failed: {e}")
+            # 폴백
+            return QuickAnalysis(
+                emotion_tone="중립적",
+                risk_level="안전",
+                has_profanity=False,
+                has_aggression=False,
+                misunderstanding_risk="없음"
+            )
+    
+    async def improve_text(
+        self,
+        text: str,
+        tone: str = "polite",
+        language: str = "ko",
+        instruction: Optional[str] = None
+    ) -> List[SuggestionOption]:
+        """텍스트 개선 (3가지 버전 생성)"""
+        try:
+            # ✨ 이 로그 추가
+            logger.info(f"🔄 Starting text improvement: text='{text[:30]}...', tone={tone}")
+            tone_ko = self.tone_mapping.get(tone, "공손하고 정중한")
+            
+            # 프롬프트 작성
+            system_prompt = f"""당신은 전문 콘텐츠 에디터입니다. 
+사용자의 텍스트를 {tone_ko} 톤으로 개선하여 3가지 다른 버전을 제안하세요.
+
+요구사항:
+1. 원문의 핵심 의미는 유지
+2. 오해의 소지가 없도록 명확하게 표현
+3. 욕설, 공격적 표현 제거
+4. 3가지 버전은 각각 다른 강도/스타일로 작성
+5. 유튜브 댓글/커뮤니티 게시글에 적합한 길이 (2-5줄)
+
+응답 형식 (JSON만):
+{{
+  "suggestions": [
+    {{
+      "version": 1,
+      "text": "개선된 텍스트 버전 1 (가장 공손함)",
+      "tone": "매우 공손",
+      "reasoning": "개선 이유 설명",
+      "confidence": 0.95
+    }},
+    {{
+      "version": 2,
+      "text": "개선된 텍스트 버전 2 (중간)",
+      "tone": "중립적",
+      "reasoning": "개선 이유 설명",
+      "confidence": 0.90
+    }},
+    {{
+      "version": 3,
+      "text": "개선된 텍스트 버전 3 (친근함)",
+      "tone": "친근함",
+      "reasoning": "개선 이유 설명",
+      "confidence": 0.88
+    }}
+  ]
+}}"""
+
+            user_prompt = f"""원본 텍스트: "{text}"
+{'추가 지시사항: ' + instruction if instruction else ''}
+
+위 텍스트를 {tone_ko} 톤으로 3가지 버전으로 개선해주세요."""
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # ✨ 이 로그 추가
+                logger.info(f"📤 Sending request to Groq API...")
+                response = await client.post(
+                    self.base_url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": 1500
+                    }
+                )
+                # ✨ 이 로그 추가
+                logger.info(f"📥 Groq API response: status={response.status_code}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                # ✨ 이 로그 추가
+                # 전체 응답을 파일로 저장 (디버깅용)
+                logger.info(f"📝 Groq response length: {len(content)} characters")
+                # 전체 내용은 파싱만 하고 로그는 안 함 (너무 길어서)
+                
+                # JSON 파싱
+                json_result = self.analyzer._extract_json(content)
+                
+                if json_result and "suggestions" in json_result:
+                    suggestions = []
+                    for item in json_result["suggestions"]:
+                        suggestions.append(SuggestionOption(
+                            version=item.get("version", 1),
+                            text=item.get("text", ""),
+                            tone=item.get("tone", tone),
+                            reasoning=item.get("reasoning", ""),
+                            confidence=item.get("confidence", 0.85)
+                        ))
+                    
+                    logger.info(f"Generated {len(suggestions)} improved versions")
+                    return suggestions
+                else:
+                    logger.warning("Failed to parse improvement response")
+                    return self._fallback_improvement(text, tone)
+            else:
+                logger.error(f"Improvement API error: {response.status_code}")
+                return self._fallback_improvement(text, tone)
+                
+        except Exception as e:
+            logger.error(f"Text improvement failed: {e}")
+            return self._fallback_improvement(text, tone)
+    
+    async def generate_reply(
+        self,
+        original_comment: str,
+        context: Optional[str] = None,
+        reply_type: str = "constructive",
+        language: str = "ko"
+    ) -> List[SuggestionOption]:
+        """댓글 답변 생성 (3가지 버전)"""
+        try:
+            # 답변 유형 매핑
+            reply_types_ko = {
+                "constructive": "건설적이고 발전적인",
+                "grateful": "감사하고 겸손한",
+                "apologetic": "사과하고 해명하는",
+                "defensive": "방어적이지만 예의있는"
+            }
+            
+            reply_tone = reply_types_ko.get(reply_type, "건설적이고 발전적인")
+            
+            system_prompt = f"""당신은 유튜브 크리에이터의 커뮤니티 매니저입니다.
+악성 댓글이나 비판적 댓글에 대해 {reply_tone} 답변을 3가지 버전으로 생성하세요.
+
+원칙:
+1. 절대 욕설이나 공격적 표현 사용 금지
+2. 팬들과의 관계 유지를 최우선으로
+3. 법적 리스크가 있는 표현 회피
+4. 브랜드 이미지 보호
+5. 각 버전은 다른 강도/접근법 사용
+
+응답 형식 (JSON만):
+{{
+  "suggestions": [
+    {{
+      "version": 1,
+      "text": "답변 버전 1 (가장 공손하고 겸손)",
+      "tone": "매우 공손",
+      "reasoning": "이 답변을 선택한 이유",
+      "confidence": 0.92
+    }},
+    {{
+      "version": 2,
+      "text": "답변 버전 2 (중립적)",
+      "tone": "중립적",
+      "reasoning": "이 답변을 선택한 이유",
+      "confidence": 0.88
+    }},
+    {{
+      "version": 3,
+      "text": "답변 버전 3 (법적 경고 포함)",
+      "tone": "단호하지만 예의있음",
+      "reasoning": "이 답변을 선택한 이유",
+      "confidence": 0.85
+    }}
+  ]
+}}"""
+
+            context_text = f"\n영상/게시글 내용: {context}" if context else ""
+            
+            user_prompt = f"""원본 댓글: "{original_comment}"{context_text}
+
+위 댓글에 대한 {reply_tone} 답변을 3가지 버전으로 생성해주세요."""
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.base_url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.7,
+                        "max_tokens": 1500
+                    }
+                )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                logger.info(f"📝 Groq response length: {len(content)} characters")
+                
+                json_result = self.analyzer._extract_json(content)
+                
+                if json_result and "suggestions" in json_result:
+                    suggestions = []
+                    for item in json_result["suggestions"]:
+                        suggestions.append(SuggestionOption(
+                            version=item.get("version", 1),
+                            text=item.get("text", ""),
+                            tone=item.get("tone", reply_type),
+                            reasoning=item.get("reasoning", ""),
+                            confidence=item.get("confidence", 0.85)
+                        ))
+                    
+                    logger.info(f"Generated {len(suggestions)} reply versions")
+                    return suggestions
+                else:
+                    logger.warning("Failed to parse reply response")
+                    return self._fallback_reply(original_comment, reply_type)
+            else:
+                logger.error(f"Reply API error: {response.status_code}")
+                return self._fallback_reply(original_comment, reply_type)
+                
+        except Exception as e:
+            logger.error(f"Reply generation failed: {e}")
+            return self._fallback_reply(original_comment, reply_type)
+    
+    async def generate_template(
+        self,
+        situation: str,
+        topic: Optional[str] = None,
+        tone: str = "professional",
+        language: str = "ko"
+    ) -> List[SuggestionOption]:
+        """상황별 템플릿 생성 (3가지 버전)"""
+        try:
+            situation_ko = self.situation_templates.get(situation, "일반 게시글")
+            tone_ko = self.tone_mapping.get(tone, "전문적인")
+            
+            system_prompt = f"""당신은 소셜 미디어 콘텐츠 전문가입니다.
+"{situation_ko}" 상황에 맞는 게시글/댓글 템플릿을 {tone_ko} 톤으로 3가지 버전 생성하세요.
+
+요구사항:
+1. 유튜브 커뮤니티 게시글 또는 댓글로 적합
+2. 3-7줄 길이 (너무 길지 않게)
+3. 이모지 사용 가능 (적절히)
+4. 각 버전은 다른 접근법/길이 사용
+5. 법적 리스크 없는 안전한 표현
+
+응답 형식 (JSON만):
+{{
+  "suggestions": [
+    {{
+      "version": 1,
+      "text": "템플릿 버전 1 (간결하고 핵심적)",
+      "tone": "간결",
+      "reasoning": "이 템플릿의 특징",
+      "confidence": 0.90
+    }},
+    {{
+      "version": 2,
+      "text": "템플릿 버전 2 (중간 길이, 감정 표현)",
+      "tone": "감정적",
+      "reasoning": "이 템플릿의 특징",
+      "confidence": 0.88
+    }},
+    {{
+      "version": 3,
+      "text": "템플릿 버전 3 (상세하고 전문적)",
+      "tone": "전문적",
+      "reasoning": "이 템플릿의 특징",
+      "confidence": 0.85
+    }}
+  ]
+}}"""
+
+            topic_text = f"\n주제/상황: {topic}" if topic else ""
+            
+            user_prompt = f"""상황: {situation_ko}{topic_text}
+
+위 상황에 맞는 {tone_ko} 톤의 템플릿을 3가지 버전으로 생성해주세요."""
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    self.base_url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        "temperature": 0.8,
+                        "max_tokens": 1500
+                    }
+                )
+            
+            if response.status_code == 200:
+                result = response.json()
+                content = result["choices"][0]["message"]["content"]
+                
+                logger.info(f"📝 Groq response length: {len(content)} characters")
+                
+                json_result = self.analyzer._extract_json(content)
+                
+                if json_result and "suggestions" in json_result:
+                    suggestions = []
+                    for item in json_result["suggestions"]:
+                        suggestions.append(SuggestionOption(
+                            version=item.get("version", 1),
+                            text=item.get("text", ""),
+                            tone=item.get("tone", tone),
+                            reasoning=item.get("reasoning", ""),
+                            confidence=item.get("confidence", 0.85)
+                        ))
+                    
+                    logger.info(f"Generated {len(suggestions)} template versions")
+                    return suggestions
+                else:
+                    logger.warning("Failed to parse template response")
+                    return self._fallback_template(situation, tone)
+            else:
+                logger.error(f"Template API error: {response.status_code}")
+                return self._fallback_template(situation, tone)
+                
+        except Exception as e:
+            logger.error(f"Template generation failed: {e}")
+            return self._fallback_template(situation, tone)
+    
+    def _fallback_improvement(self, text: str, tone: str) -> List[SuggestionOption]:
+        """텍스트 개선 폴백"""
+        return [
+            SuggestionOption(
+                version=1,
+                text=f"{text} (더 공손한 표현으로 수정 필요)",
+                tone=tone,
+                reasoning="API 오류로 인한 기본 제안",
+                confidence=0.5
+            ),
+            SuggestionOption(
+                version=2,
+                text=f"{text} (중립적 표현으로 수정 필요)",
+                tone="neutral",
+                reasoning="API 오류로 인한 기본 제안",
+                confidence=0.5
+            ),
+            SuggestionOption(
+                version=3,
+                text=f"{text} (친근한 표현으로 수정 필요)",
+                tone="friendly",
+                reasoning="API 오류로 인한 기본 제안",
+                confidence=0.5
+            )
+        ]
+    
+    def _fallback_reply(self, comment: str, reply_type: str) -> List[SuggestionOption]:
+        """답변 생성 폴백"""
+        return [
+            SuggestionOption(
+                version=1,
+                text="소중한 의견 감사합니다. 더 나은 콘텐츠로 보답하겠습니다.",
+                tone="grateful",
+                reasoning="기본 감사 답변",
+                confidence=0.6
+            ),
+            SuggestionOption(
+                version=2,
+                text="피드백 감사드립니다. 어떤 부분을 개선하면 좋을지 구체적으로 알려주시면 큰 도움이 됩니다.",
+                tone="constructive",
+                reasoning="건설적 피드백 요청",
+                confidence=0.6
+            ),
+            SuggestionOption(
+                version=3,
+                text="의견 주셔서 감사합니다. 앞으로 더 신중히 콘텐츠를 제작하겠습니다.",
+                tone="apologetic",
+                reasoning="사과와 개선 의지",
+                confidence=0.6
+            )
+        ]
+    
+    def _fallback_template(self, situation: str, tone: str) -> List[SuggestionOption]:
+        """템플릿 생성 폴백"""
+        templates = {
+            "promotion": "새로운 콘텐츠를 준비했습니다! 많은 관심 부탁드립니다 🙏",
+            "announcement": "안녕하세요! 중요한 공지 사항을 전달드립니다.",
+            "apology": "불편을 드려 진심으로 사과드립니다. 더 나은 모습으로 찾아뵙겠습니다.",
+            "feedback_request": "여러분의 소중한 의견을 듣고 싶습니다. 댓글로 의견 남겨주세요!"
+        }
+        
+        base_text = templates.get(situation, "게시글 내용")
+        
+        return [
+            SuggestionOption(
+                version=1,
+                text=base_text,
+                tone=tone,
+                reasoning="기본 템플릿",
+                confidence=0.6
+            ),
+            SuggestionOption(
+                version=2,
+                text=f"{base_text} (상세 버전)",
+                tone=tone,
+                reasoning="기본 템플릿 확장",
+                confidence=0.6
+            ),
+            SuggestionOption(
+                version=3,
+                text=f"{base_text} (간결 버전)",
+                tone=tone,
+                reasoning="기본 템플릿 축약",
+                confidence=0.6
+            )
+        ]
 
 
 # AI 서비스 인스턴스
 analyzer = GroqDualModelAnalyzer()
+writing_assistant = AIWritingAssistant(analyzer)
 
 
-# ==================== API 엔드포인트 ====================
+# ==================== 기존 API 엔드포인트 (유지) ====================
 
 @app.on_event("startup")
 async def startup_event():
     """서버 시작"""
     logger.info("=" * 60)
-    logger.info("SNS Content Analyzer - Groq Dual Model")
+    logger.info("SNS Content Analyzer - Groq Dual Model + AI Assistant")
     logger.info("=" * 60)
     
     if analyzer.api_key:
         logger.info("✓ Groq API configured")
         logger.info(f"  - Guard Model: {analyzer.models['guard']}")
         logger.info(f"  - Analysis Model: {analyzer.models['analysis']}")
-        logger.info("  - Strategy: Guard filters → Llama analyzes")
+        logger.info("  - AI Assistant: Enabled")
     else:
         logger.warning("⚠ No API key - fallback mode")
 
@@ -578,33 +1177,34 @@ async def startup_event():
 async def root():
     """API 상태"""
     return {
-        "service": "SNS Content Analyzer - Groq Dual Model",
+        "service": "SNS Content Analyzer - Groq Dual Model + AI Assistant",
         "status": "running",
-        "version": "3.0.0",
+        "version": "3.1.0",
         "models": {
             "guard": analyzer.models["guard"],
             "analysis": analyzer.models["analysis"]
         },
-        "strategy": "Guard filters unsafe content → Llama provides detailed analysis",
-        "api_configured": bool(analyzer.api_key),
-        "cost": "100% FREE",
         "features": [
             "Dual model analysis",
-            "13 safety categories (Llama Guard)",
-            "Detailed scoring (Llama 3.1)",
-            "Parallel execution"
-        ]
+            "13 safety categories",
+            "AI Writing Assistant",
+            "Text improvement",
+            "Reply generation",
+            "Template creation"
+        ],
+        "endpoints": {
+            "content_analysis": "/analyze/text",
+            "ai_assistant_analyze": "/api/assistant/analyze",
+            "ai_assistant_improve": "/api/assistant/improve",
+            "ai_assistant_reply": "/api/assistant/reply",
+            "ai_assistant_template": "/api/assistant/template"
+        }
     }
 
 
 @app.post("/analyze/text", response_model=AnalysisResponse)
 async def analyze_text(request: TextAnalysisRequest):
-    """
-    텍스트 분석 (듀얼 모델)
-    
-    - **use_dual_model=True**: Guard + Llama 3.1 (더 정확, 약간 느림)
-    - **use_dual_model=False**: Llama 3.1만 (빠름)
-    """
+    """텍스트 분석 (듀얼 모델)"""
     logger.info(f"Analyzing text (length: {len(request.text)}, dual: {request.use_dual_model})")
     result = await analyzer.analyze_text(
         request.text, 
@@ -689,6 +1289,159 @@ async def crawl_youtube(request: YoutubeCrawlRequest):
         raise HTTPException(status_code=500, detail=f"Crawling failed: {str(e)}")
 
 
+# ==================== 🆕 AI Assistant 엔드포인트 ====================
+
+@app.post("/api/assistant/analyze", response_model=AssistantResponse)
+async def assistant_analyze(request: AssistantAnalyzeRequest):
+    """
+    AI Assistant - 원본 텍스트 분석
+    
+    감정 톤, 위험도, 오해 가능성 등을 빠르게 분석
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Assistant analyzing: {request.text[:50]}...")
+        
+        analysis = await writing_assistant.quick_analyze(
+            request.text,
+            request.language
+        )
+        
+        processing_time = (time.time() - start_time) * 1000
+        
+        return AssistantResponse(
+            success=True,
+            analysis=analysis,
+            suggestions=[],
+            processing_time_ms=round(processing_time, 2),
+            model_used="llama-guard-3-8b + llama-3.1-8b-instant"
+        )
+        
+    except Exception as e:
+        logger.error(f"Assistant analyze failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/assistant/improve", response_model=AssistantResponse)
+async def assistant_improve(request: AssistantImproveRequest):
+    """
+    AI Assistant - 텍스트 개선
+    
+    원본 텍스트를 지정된 톤으로 개선하여 3가지 버전 제안
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Assistant improving text (tone: {request.tone})")
+        
+        # 1. 빠른 분석
+        analysis = await writing_assistant.quick_analyze(
+            request.text,
+            request.language
+        )
+        
+        # 2. 텍스트 개선
+        suggestions = await writing_assistant.improve_text(
+            request.text,
+            request.tone,
+            request.language,
+            request.instruction
+        )
+        
+        processing_time = (time.time() - start_time) * 1000
+        
+        return AssistantResponse(
+            success=True,
+            analysis=analysis,
+            suggestions=suggestions,
+            processing_time_ms=round(processing_time, 2),
+            model_used="llama-3.1-8b-instant"
+        )
+        
+    except Exception as e:
+        logger.error(f"Assistant improve failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/assistant/reply", response_model=AssistantResponse)
+async def assistant_reply(request: AssistantReplyRequest):
+    """
+    AI Assistant - 댓글 답변 생성
+    
+    원본 댓글에 대한 적절한 답변을 3가지 버전으로 생성
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Assistant generating reply (type: {request.reply_type})")
+        
+        # 1. 댓글 분석
+        analysis = await writing_assistant.quick_analyze(
+            request.original_comment,
+            request.language
+        )
+        
+        # 2. 답변 생성
+        suggestions = await writing_assistant.generate_reply(
+            request.original_comment,
+            request.context,
+            request.reply_type,
+            request.language
+        )
+        
+        processing_time = (time.time() - start_time) * 1000
+        
+        return AssistantResponse(
+            success=True,
+            analysis=analysis,
+            suggestions=suggestions,
+            processing_time_ms=round(processing_time, 2),
+            model_used="llama-3.1-8b-instant"
+        )
+        
+    except Exception as e:
+        logger.error(f"Assistant reply failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/assistant/template", response_model=AssistantResponse)
+async def assistant_template(request: AssistantTemplateRequest):
+    """
+    AI Assistant - 상황별 템플릿 생성
+    
+    특정 상황(홍보, 공지, 사과 등)에 맞는 템플릿을 3가지 버전으로 생성
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        logger.info(f"Assistant generating template (situation: {request.situation})")
+        
+        # 템플릿 생성
+        suggestions = await writing_assistant.generate_template(
+            request.situation,
+            request.topic,
+            request.tone,
+            request.language
+        )
+        
+        processing_time = (time.time() - start_time) * 1000
+        
+        return AssistantResponse(
+            success=True,
+            analysis=None,  # 템플릿 생성은 분석 불필요
+            suggestions=suggestions,
+            processing_time_ms=round(processing_time, 2),
+            model_used="llama-3.1-8b-instant"
+        )
+        
+    except Exception as e:
+        logger.error(f"Assistant template failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/models/info")
@@ -703,11 +1456,21 @@ async def models_info():
         },
         "analysis_model": {
             "name": analyzer.models["analysis"],
-            "purpose": "Detailed analysis",
-            "features": ["Scoring", "Reasoning", "Multi-category"],
-            "speed": "~50ms"
+            "purpose": "Detailed analysis + AI Assistant",
+            "features": [
+                "Scoring", 
+                "Reasoning", 
+                "Text improvement",
+                "Reply generation",
+                "Template creation"
+            ],
+            "speed": "~200ms"
         },
-        "strategy": "Parallel execution for speed"
+        "assistant_features": {
+            "tones": list(writing_assistant.tone_mapping.keys()),
+            "situations": list(writing_assistant.situation_templates.keys()),
+            "reply_types": ["constructive", "grateful", "apologetic", "defensive"]
+        }
     }
 
 
@@ -718,25 +1481,26 @@ async def health_check():
         "status": "healthy",
         "api_configured": bool(analyzer.api_key),
         "models_ready": True,
+        "ai_assistant_ready": True,
         "timestamp": datetime.now().isoformat()
     }
-
 
 if __name__ == "__main__":
     import uvicorn
     
     print("=" * 60)
-    print("SNS Content Analyzer - Groq Dual Model Edition")
+    print("SNS Content Analyzer - Groq Dual Model + AI Assistant")
     print("=" * 60)
     print("\n🚀 Models:")
     print(f"  1. {analyzer.models['guard']} - Safety filtering")
-    print(f"  2. {analyzer.models['analysis']} - Detailed analysis")
-    print("\n⚡ Strategy:")
-    print("  - Parallel execution (both models run simultaneously)")
-    print("  - Guard: 13 safety categories")
-    print("  - Llama 3.1: Detailed scoring + reasoning")
+    print(f"  2. {analyzer.models['analysis']} - Analysis + AI Assistant")
+    print("\n✨ AI Assistant Features:")
+    print("  - Text improvement (3 versions)")
+    print("  - Reply generation (3 versions)")
+    print("  - Template creation (3 versions)")
+    print("  - Quick emotion/risk analysis")
     print("\n💰 Cost: 100% FREE")
-    print("  - Rate limit: 30 req/min, 14,400 req/day")
+    print("  - Rate limit: 30 req/min")
     print("\n🔑 Setup:")
     print("  export GROQ_API_KEY=your_key")
     print("  python main_groq_dual.py")
