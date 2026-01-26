@@ -1626,39 +1626,48 @@ function CommentManagementView() {
                     : 'text-slate-500 hover:text-slate-300'
                     }`}
                 >
-                  <Database size={12} /> SHOW ALL HISTORY
+                  {status}
+                </button>
+              ))}
+            </div>
+
+            {lastAnalyzedUrl && (
+              <button
+                onClick={() => loadComments(null, true)}
+                className="h-8 px-3 rounded-lg flex items-center gap-2 text-[10px] font-bold border border-slate-700 hover:bg-slate-800 text-slate-300 transition-all"
+              >
+                <Database size={12} /> SHOW ALL HISTORY
+              </button>
+            )}
+
+            <div className="px-3 py-1 rounded-full bg-slate-800 text-[10px] font-bold text-slate-400 border border-slate-700">
+              {comments.length} ITEMS {lastAnalyzedUrl ? 'FOR THIS VIDEO' : 'TOTAL'}
+            </div>
+
+            <button onClick={() => loadComments()} className="h-8 w-8 flex items-center justify-center p-0 rounded-full hover:bg-slate-800 text-slate-400 transition-all">
+              <RotateCcw size={14} className={loading ? 'animate-spin' : ''} />
+            </button>
+
+            {/* Bulk Actions */}
+            <div className="flex items-center gap-2 pl-2 border-l border-slate-800 ml-2">
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={handleDeleteSelected}
+                  className="h-8 px-3 rounded-lg text-[10px] font-bold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-all animate-in fade-in"
+                >
+                  DELETE SELECTED ({selectedIds.length})
                 </button>
               )}
-              <div className="px-3 py-1 rounded-full bg-slate-800 text-[10px] font-bold text-slate-400 border border-slate-700">
-                {comments.length} ITEMS {lastAnalyzedUrl ? 'FOR THIS VIDEO' : 'TOTAL'}
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => loadComments()} className="h-8 w-8 p-0 rounded-full hover:bg-slate-800">
-                <RotateCcw size={14} className={loading ? 'animate-spin' : ''} />
-              </Button>
-              {/* Bulk Actions */}
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-800 ml-2">
-                {selectedIds.length > 0 && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="h-8 text-[10px] font-bold px-3 animate-in fade-in"
-                    onClick={handleDeleteSelected}
-                  >
-                    DELETE SELECTED ({selectedIds.length})
-                  </Button>
-                )}
-                {comments.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-[10px] font-bold px-3 text-red-400 hover:text-red-500 hover:bg-red-500/10 border-red-900/30"
-                    onClick={handleDeleteAll}
-                  >
-                    DELETE ALL
-                  </Button>
-                )}
-              </div>
-            </div >
+              {comments.length > 0 && (
+                <button
+                  onClick={handleDeleteAll}
+                  className="h-8 px-3 rounded-lg text-[10px] font-bold border border-red-900/30 text-red-400 hover:bg-red-950/30 hover:text-red-300 transition-all"
+                >
+                  DELETE ALL
+                </button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
