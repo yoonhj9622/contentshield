@@ -20,7 +20,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final AnalysisService analysisService;
-    private final BlockedWordService blockedWordService;  // ← 추가
+    private final BlockedWordService blockedWordService; // ← 추가
     private final RestTemplate restTemplate;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
@@ -30,7 +30,6 @@ public class CommentService {
     /**
      * 유튜브 댓글 크롤링 및 분석
      */
-<<<<<<< HEAD
     public Map<String, Object> crawlAndAnalyze(String url, Long userId, String startDateStr, String endDateStr) {
         System.out.println("[DEBUG] crawlAndAnalyze called for URL: " + url + ", userId: " + userId + ", Period: "
                 + startDateStr + " ~ " + endDateStr);
@@ -195,8 +194,10 @@ public class CommentService {
      * 댓글 목록 조회
      */
     @Transactional(readOnly = true)
-    public List<Comment> getComments(Long userId, String url, String startDateStr, String endDateStr, Boolean isMalicious) {
-        System.out.println("[DEBUG] getComments with period: " + startDateStr + " ~ " + endDateStr + ", isMalicious: " + isMalicious);
+    public List<Comment> getComments(Long userId, String url, String startDateStr, String endDateStr,
+            Boolean isMalicious) {
+        System.out.println("[DEBUG] getComments with period: " + startDateStr + " ~ " + endDateStr + ", isMalicious: "
+                + isMalicious);
 
         // 날짜 파싱 (기본값 설정)
         java.time.LocalDateTime start = (startDateStr != null && !startDateStr.isEmpty())
@@ -210,13 +211,15 @@ public class CommentService {
 
         if (url != null && !url.isEmpty()) {
             if (isMalicious != null) {
-                comments = commentRepository.findByUserIdAndContentUrlAndIsMaliciousAndCommentedAtBetween(userId, url, isMalicious, start, end);
+                comments = commentRepository.findByUserIdAndContentUrlAndIsMaliciousAndCommentedAtBetween(userId, url,
+                        isMalicious, start, end);
             } else {
                 comments = commentRepository.findByUserIdAndContentUrlAndCommentedAtBetween(userId, url, start, end);
             }
         } else {
             if (isMalicious != null) {
-                comments = commentRepository.findByUserIdAndIsMaliciousAndCommentedAtBetween(userId, isMalicious, start, end);
+                comments = commentRepository.findByUserIdAndIsMaliciousAndCommentedAtBetween(userId, isMalicious, start,
+                        end);
             } else {
                 comments = commentRepository.findByUserIdAndCommentedAtBetween(userId, start, end);
             }
@@ -257,7 +260,6 @@ public class CommentService {
     public void deleteComment(Long commentId) {
         commentRepository.deleteById(commentId);
     }
-<<<<<<< HEAD
 
     /**
      * 댓글 다중 삭제 (Batch)
