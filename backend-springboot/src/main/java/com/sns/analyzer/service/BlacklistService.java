@@ -1,8 +1,10 @@
 // ==================== BlacklistService.java ====================
 package com.sns.analyzer.service;
 
-import com.sns.analyzer.entity.*;
-import com.sns.analyzer.repository.*;
+import com.sns.analyzer.entity.BlacklistUser;
+import com.sns.analyzer.entity.BlacklistUser.Platform;
+import com.sns.analyzer.entity.BlacklistUser.BlacklistStatus;
+import com.sns.analyzer.repository.BlacklistUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +23,7 @@ public class BlacklistService {
      */
     public BlacklistUser addToBlacklist(Long userId, Long channelId, 
                                        String authorName, String authorIdentifier,
-                                       BlacklistUser.Platform platform, String reason) {
+                                       Platform platform, String reason, String commentText) {
         // 이미 블랙리스트에 있는지 확인
         if (blacklistRepository.existsByUserIdAndBlockedAuthorIdentifier(userId, authorIdentifier)) {
             throw new IllegalArgumentException("Author already in blacklist");
@@ -34,10 +36,11 @@ public class BlacklistService {
             .blockedAuthorIdentifier(authorIdentifier)
             .platform(platform)
             .reason(reason)
+            .commentText(commentText)
             .violationCount(1)
             .autoAdded(false)
             .thresholdViolations(3)
-            .status(BlacklistUser.BlacklistStatus.ACTIVE)
+            .status(BlacklistStatus.ACTIVE)
             .createdAt(LocalDateTime.now())
             .build();
         
@@ -49,7 +52,7 @@ public class BlacklistService {
      */
     public BlacklistUser autoAddToBlacklist(Long userId, Long channelId,
                                            String authorName, String authorIdentifier,
-                                           BlacklistUser.Platform platform, Integer violationCount) {
+                                           Platform platform, Integer violationCount, String commentText) {
         BlacklistUser blacklistUser = BlacklistUser.builder()
             .userId(userId)
             .channelId(channelId)
@@ -57,10 +60,11 @@ public class BlacklistService {
             .blockedAuthorIdentifier(authorIdentifier)
             .platform(platform)
             .reason("Auto-added: " + violationCount + " violations detected")
+            .commentText(commentText)
             .violationCount(violationCount)
             .autoAdded(true)
             .thresholdViolations(3)
-            .status(BlacklistUser.BlacklistStatus.ACTIVE)
+            .status(BlacklistStatus.ACTIVE)
             .createdAt(LocalDateTime.now())
             .build();
         
@@ -71,7 +75,7 @@ public class BlacklistService {
      * 블랙리스트 조회
      */
     public List<BlacklistUser> getUserBlacklist(Long userId) {
-        return blacklistRepository.findByUserIdAndStatus(userId, BlacklistUser.BlacklistStatus.ACTIVE);
+        return blacklistRepository.findByUserIdAndStatus(userId, BlacklistStatus.ACTIVE);
     }
     
     /**
@@ -81,7 +85,7 @@ public class BlacklistService {
         BlacklistUser blacklistUser = blacklistRepository.findById(blacklistId)
             .orElseThrow(() -> new IllegalArgumentException("Blacklist entry not found"));
         
-        blacklistUser.setStatus(BlacklistUser.BlacklistStatus.REMOVED);
+        blacklistUser.setStatus(BlacklistStatus.REMOVED);
         blacklistUser.setUpdatedAt(LocalDateTime.now());
         
         blacklistRepository.save(blacklistUser);

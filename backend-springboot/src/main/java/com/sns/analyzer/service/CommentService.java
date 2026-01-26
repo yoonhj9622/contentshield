@@ -20,6 +20,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final AnalysisResultRepository analysisResultRepository;
     private final AnalysisService analysisService;
+    private final BlockedWordService blockedWordService;  // ← 추가
     private final RestTemplate restTemplate;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
@@ -29,6 +30,7 @@ public class CommentService {
     /**
      * 유튜브 댓글 크롤링 및 분석
      */
+<<<<<<< HEAD
     public Map<String, Object> crawlAndAnalyze(String url, Long userId, String startDateStr, String endDateStr) {
         System.out.println("[DEBUG] crawlAndAnalyze called for URL: " + url + ", userId: " + userId + ", Period: "
                 + startDateStr + " ~ " + endDateStr);
@@ -42,32 +44,22 @@ public class CommentService {
                 : LocalDateTime.now();
 
         // 0. 기존 데이터 정리 (별도 트랜잭션으로 처리하여 락 점유 최소화)
-        // 0. 기존 데이터 정리 (Comments 테이블만 초기화)
-        // AnalysisResult는 스냅샷 데이터가 있으므로 유지하고, Comments는 현재 세션용으로 리셋
         transactionTemplate.execute(status -> {
             try {
-                System.out.println("[DEBUG] Clearing COMMENTS table for user: " + userId
-                        + " (Keeping History)");
-
-                // AnalysisResult는 삭제하지 않음!
-                // analysisResultRepository.deleteByUserId(userId);
-
-                // 사용자의 댓글만 삭제
+                System.out.println("[DEBUG] Clearing COMMENTS table for user: " + userId + " (Keeping History)");
                 commentRepository.deleteByUserId(userId);
                 commentRepository.flush();
                 return null;
             } catch (Exception e) {
                 System.err.println("[ERROR] Failed to cleanup data: " + e.getMessage());
-                // FK 제약조건 등으로 실패할 경우 로그만 남기고 진행 (히스토리 보존 최우선)
-                // throw new RuntimeException("Data cleanup failed", e);
                 return null;
             }
         });
 
-        // 1. Python AI 서버에 크롤링 요청 (시간이 오래 걸리므로 트랜잭션 밖에서 수행)
+        // 1. Python AI 서버에 크롤링 요청
         List<Map<String, Object>> crawledComments = crawlYoutubeComments(url);
 
-        // 2. DB 저장 및 분석 (새로운 트랜잭션으로 처리)
+        // 2. DB 저장 및 분석
         return transactionTemplate.execute(status -> {
             int successCount = 0;
             int failCount = 0;
@@ -93,7 +85,7 @@ public class CommentService {
                         continue;
                     }
 
-                    // 댓글 저장 (기간 필터링 없이 전체 저장)
+                    // 댓글 저장
                     Comment comment = Comment.builder()
                             .userId(userId)
                             .platform("YOUTUBE")
@@ -103,7 +95,7 @@ public class CommentService {
                             .externalCommentId(
                                     externalId != null && !externalId.isEmpty() ? externalId
                                             : UUID.randomUUID().toString())
-                            .commentText(text)
+                            .content(text) // Corrected field name
                             .commentedAt(commentedAt)
                             .isAnalyzed(false)
                             .isMalicious(false)
@@ -197,37 +189,65 @@ public class CommentService {
     }
 
     /**
-     * 댓글 목록 조회
+     * 댓글 목록 조회 (차단 단어 체크 포함)
      */
     /**
      * 댓글 목록 조회
      */
     @Transactional(readOnly = true)
-    public List<Comment> getComments(Long userId, String url, String startDateStr, String endDateStr,
-            Boolean isMalicious) {
-        System.out.println("[DEBUG] getComments with period: " + startDateStr + " ~ " + endDateStr + ", isMalicious: "
-                + isMalicious);
+    public List<Comment> getComments(Long userId, String url, String startDateStr, String endDateStr, Boolean isMalicious) {
+        System.out.println("[DEBUG] getComments with period: " + startDateStr + " ~ " + endDateStr + ", isMalicious: " + isMalicious);
 
-        // 날짜 파싱 (기본값 설정: 기간 미지정 시 전체 또는 최근 1주일)
+        // 날짜 파싱 (기본값 설정)
         java.time.LocalDateTime start = (startDateStr != null && !startDateStr.isEmpty())
                 ? java.time.LocalDate.parse(startDateStr).atStartOfDay()
-                : java.time.LocalDateTime.now().minusYears(1); // 기본값 크게 설정
+                : java.time.LocalDateTime.now().minusYears(1);
         java.time.LocalDateTime end = (endDateStr != null && !endDateStr.isEmpty())
                 ? java.time.LocalDate.parse(endDateStr).atTime(23, 59, 59)
                 : java.time.LocalDateTime.now();
 
+        List<Comment> comments;
+
         if (url != null && !url.isEmpty()) {
             if (isMalicious != null) {
-                return commentRepository.findByUserIdAndContentUrlAndIsMaliciousAndCommentedAtBetween(userId, url,
-                        isMalicious, start, end);
+                comments = commentRepository.findByUserIdAndContentUrlAndIsMaliciousAndCommentedAtBetween(userId, url, isMalicious, start, end);
+            } else {
+                comments = commentRepository.findByUserIdAndContentUrlAndCommentedAtBetween(userId, url, start, end);
             }
-            return commentRepository.findByUserIdAndContentUrlAndCommentedAtBetween(userId, url, start, end);
+        } else {
+            if (isMalicious != null) {
+                comments = commentRepository.findByUserIdAndIsMaliciousAndCommentedAtBetween(userId, isMalicious, start, end);
+            } else {
+                comments = commentRepository.findByUserIdAndCommentedAtBetween(userId, start, end);
+            }
         }
 
-        if (isMalicious != null) {
-            return commentRepository.findByUserIdAndIsMaliciousAndCommentedAtBetween(userId, isMalicious, start, end);
+        // 🔥 차단 단어 체크 (blockedWords)
+        List<BlockedWord> blockedWords = blockedWordService.getActiveBlockedWords(userId);
+        for (Comment comment : comments) {
+            checkBlockedWords(comment, blockedWords);
         }
-        return commentRepository.findByUserIdAndCommentedAtBetween(userId, start, end);
+
+        return comments;
+    }
+
+    /**
+     * 댓글에 차단 단어 포함 여부 체크
+     */
+    private void checkBlockedWords(Comment comment, List<BlockedWord> blockedWords) {
+        if (comment.getContent() == null || blockedWords.isEmpty()) {
+            return;
+        }
+
+        String content = comment.getContent().toLowerCase();
+
+        for (BlockedWord word : blockedWords) {
+            if (content.contains(word.getWord().toLowerCase())) {
+                comment.setContainsBlockedWord(true);
+                comment.setMatchedBlockedWord(word.getWord());
+                return;
+            }
+        }
     }
 
     /**
@@ -237,6 +257,7 @@ public class CommentService {
     public void deleteComment(Long commentId) {
         commentRepository.deleteById(commentId);
     }
+<<<<<<< HEAD
 
     /**
      * 댓글 다중 삭제 (Batch)

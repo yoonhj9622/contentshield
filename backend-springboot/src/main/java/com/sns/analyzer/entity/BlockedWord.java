@@ -14,7 +14,7 @@ public class BlockedWord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long wordId;
     
-    @Column(nullable = false)
+    @Column(name = "user_id")
     private Long userId;
     
     @Column(nullable = false, length = 100)
@@ -22,16 +22,24 @@ public class BlockedWord {
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private WordCategory category;
+    @Builder.Default
+    private WordCategory category = WordCategory.PROFANITY;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Builder.Default
     private Severity severity = Severity.MEDIUM;
     
+    @Column(length = 10)
+    @Builder.Default
+    private String language = "ko";
+    
     @Column(nullable = false)
+    @Builder.Default
     private Boolean isActive = true;
     
     @Column(nullable = false)
+    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
     
     private LocalDateTime updatedAt;

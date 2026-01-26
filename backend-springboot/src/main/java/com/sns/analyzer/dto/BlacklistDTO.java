@@ -24,6 +24,7 @@ public class BlacklistDTO {
         private String blockedAuthorIdentifier;
         private String platform;
         private String reason;
+        private String commentText;
         private Integer violationCount;
         private Boolean autoAdded;
         private String status;

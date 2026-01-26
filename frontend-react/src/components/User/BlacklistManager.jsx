@@ -2,10 +2,11 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { blacklistService } from '../../services/blacklistService'
-import { UserX, Trash2, Plus } from 'lucide-react'
+import { UserX, Trash2, Plus, MessageSquare } from 'lucide-react'
 
 export default function BlacklistManager() {
   const [showAddModal, setShowAddModal] = useState(false)
+  const [selectedComment, setSelectedComment] = useState(null)
   const queryClient = useQueryClient()
 
   const { data: blacklist, isLoading } = useQuery('blacklist', blacklistService.getBlacklist)
@@ -50,6 +51,9 @@ export default function BlacklistManager() {
                 Reason
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Comment
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                 Added
               </th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
@@ -60,7 +64,7 @@ export default function BlacklistManager() {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
                   Loading...
                 </td>
               </tr>
@@ -89,6 +93,19 @@ export default function BlacklistManager() {
                   <td className="px-6 py-4 text-sm text-gray-900">
                     {item.reason}
                   </td>
+                  <td className="px-6 py-4">
+                    {item.commentText ? (
+                      <button
+                        onClick={() => setSelectedComment(item.commentText)}
+                        className="flex items-center text-primary-600 hover:text-primary-800"
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        <span className="text-sm">View</span>
+                      </button>
+                    ) : (
+                      <span className="text-sm text-gray-400">-</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
                     {new Date(item.createdAt).toLocaleDateString()}
                   </td>
@@ -104,7 +121,7 @@ export default function BlacklistManager() {
               ))
             ) : (
               <tr>
-                <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
                   No blocked users yet
                 </td>
               </tr>
@@ -113,9 +130,17 @@ export default function BlacklistManager() {
         </table>
       </div>
 
-      {/* Add Modal (simplified) */}
+      {/* Add Modal */}
       {showAddModal && (
         <AddBlacklistModal onClose={() => setShowAddModal(false)} />
+      )}
+
+      {/* Comment View Modal */}
+      {selectedComment && (
+        <CommentModal 
+          comment={selectedComment} 
+          onClose={() => setSelectedComment(null)} 
+        />
       )}
     </div>
   )
@@ -196,6 +221,35 @@ function AddBlacklistModal({ onClose }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+function CommentModal({ comment, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+        <div className="flex justify-between items-start mb-4">
+          <h2 className="text-xl font-bold">악성 댓글 내용</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-gray-800 whitespace-pre-wrap">{comment}</p>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+          >
+            닫기
+          </button>
+        </div>
       </div>
     </div>
   )

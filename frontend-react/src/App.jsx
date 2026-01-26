@@ -1,4 +1,4 @@
-// [File: App.jsx / Date: 2026-01-22 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 적용]
+// [File: App.jsx / Date: 2026-01-25 / 작성자: Antigravity / 설명: 대시보드 메뉴별 독립적 Top-level URL 라우팅 적용]
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
@@ -13,6 +13,9 @@ import UserDashboard from './components/User/DashboardV2'
 
 // ✅ Template Manager (AI Writing Assistant 역할)
 import TemplateManager from './components/User/TemplateManager'
+
+// ✅ Blocked Word Manager (차단 단어 관리)
+import BlockedWordManager from './components/User/BlockedWordManager'
 
 // 관리자 전용 기능
 import UserManagement from './components/Admin/UserManagement'
@@ -89,6 +92,13 @@ function App() {
         <Route path="/writing" element={
           <PrivateRoute>
             <TemplateManager />
+          </PrivateRoute>
+        } />
+
+        {/* 🚫 Blocked Word Manager (차단 단어 관리 - 독립 페이지) */}
+        <Route path="/blocked-words" element={
+          <PrivateRoute>
+            <BlockedWordManager />
           </PrivateRoute>
         } />
 

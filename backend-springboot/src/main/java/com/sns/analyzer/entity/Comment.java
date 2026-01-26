@@ -1,6 +1,7 @@
 // ==================== Comment.java ====================
 package com.sns.analyzer.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -39,8 +40,10 @@ public class Comment {
     @Column(length = 200)
     private String authorIdentifier;
 
+    // ✅ 필드명은 content, JSON에서는 commentText로 직렬화
+    @JsonProperty("commentText")
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
-    private String commentText;
+    private String content;
 
     @Column(nullable = false)
     private LocalDateTime commentedAt;
@@ -78,6 +81,13 @@ public class Comment {
     private LocalDateTime createdAt = LocalDateTime.now().withNano(0);
 
     private LocalDateTime updatedAt;
+
+    // ========== 차단 단어 관련 임시 필드 (DB에 저장 안 됨) ==========
+    @Transient
+    private Boolean containsBlockedWord = false;
+
+    @Transient
+    private String matchedBlockedWord;
 
     @PreUpdate
     protected void onUpdate() {
