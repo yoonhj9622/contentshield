@@ -1228,6 +1228,10 @@ function CommentManagementView() {
   const [lastAnalyzedUrl, setLastAnalyzedUrl] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedIds, setSelectedIds] = useState([]); // Bulk select state
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const pageSize = 20;
 
   // 초기 댓글 목록 로드
   useEffect(() => {
@@ -1264,19 +1268,21 @@ function CommentManagementView() {
           targetUrl,
           startDate,
           endDate,
-          filterStatus
+          filterStatus,
+          currentPage,
+          pageSize
         );
       }
 
-      // Apply Client-side filtering if needed (though backend handles most)
-      let filteredData = data;
-      if (filterStatus === 'clean') {
-        filteredData = data.filter(c => !c.isMalicious);
-      } else if (filterStatus === 'malicious') {
-        filteredData = data.filter(c => c.isMalicious);
+      if (data && data.content) {
+        setComments(data.content);
+        setTotalPages(data.totalPages);
+        setTotalElements(data.totalElements);
+      } else {
+        setComments(Array.isArray(data) ? data : []);
+        setTotalPages(0);
+        setTotalElements(Array.isArray(data) ? data.length : 0);
       }
-
-      setComments(filteredData);
     } catch (error) {
       console.error('Failed to load comments:', error);
       // Fallback for demo/empty state
@@ -1286,12 +1292,11 @@ function CommentManagementView() {
     }
   };
 
-  // 날짜 또는 필터 변경 시 목록 자동 갱신 및 스마트 기간 설정
   useEffect(() => {
     if (startDate && endDate) {
       loadComments();
     }
-  }, [startDate, endDate, filterStatus]);
+  }, [startDate, endDate, filterStatus, currentPage]);
 
   // 시작 날짜 변경 시 종료 날짜 자동 7일 세팅
   const handleStartDateChange = (e) => {
@@ -1330,16 +1335,17 @@ function CommentManagementView() {
     const diffTime = end - start;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays > 7) {
-      setMessage({ type: 'error', text: '분석 기간은 최대 7일을 초과할 수 없습니다.' });
-      // 강제로 7일로 맞춤
+    if (diffDays > 30) {
+      setMessage({ type: 'error', text: '분석 기간은 최대 30일을 초과할 수 없습니다.' });
+      // 강제로 30일로 맞춤
       const maxEnd = new Date(start);
-      maxEnd.setDate(maxEnd.getDate() + 7);
+      maxEnd.setDate(maxEnd.getDate() + 30);
       setEndDate(maxEnd.toISOString().split('T')[0]);
     } else {
       setEndDate(newEnd);
       setMessage(null);
     }
+    setCurrentPage(0); // Reset page on filter change
   };
 
   const handleAnalyze = async () => {
@@ -1360,10 +1366,12 @@ function CommentManagementView() {
     const diffTime = end - start;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays > 7) {
-      setMessage({ type: 'error', text: '분석 기간은 최대 1주일까지만 가능합니다.' });
+    if (diffDays > 30) {
+      setMessage({ type: 'error', text: '분석 기간은 최대 30일까지 가능합니다.' });
       return;
     }
+
+    setCurrentPage(0); // Reset page on new analysis
 
     setAnalyzing(true);
     setLoadingStatus('유튜브 데이터 수집 중...');
@@ -1382,8 +1390,9 @@ function CommentManagementView() {
         setLastAnalyzedUrl(url); // 마지막 분석 URL 저장
         setMessage({
           type: 'success',
-          text: `수집 완료: ${result.totalCrawled}개, 분석 완료: ${result.analyzedCount}개 (기간 필터링 적용)`
+          text: `수집 완료: ${result.totalCrawled}개, 분석 완료: ${result.analyzedCount}개 (필터링 적용됨)`
         });
+        setCurrentPage(0); // Reset page to 0 before loading
         loadComments(url); // 해당 URL로 목록 갱신
       }, 800);
     } catch (error) {
@@ -1730,12 +1739,26 @@ function CommentManagementView() {
                       </div>
                     </td>
                     <td className="p-4 align-top text-right">
-                      <button
-                        onClick={() => handleDelete(comment.commentId)}
-                        className="p-2 rounded-lg text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex flex-row items-center justify-end gap-1">
+                        {/* 블랙리스트 추가 버튼 (악성 댓글만 표시) */}
+                        {comment.isMalicious && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddToBlacklist(comment)}
+                            className="text-slate-500 hover:text-orange-400 opacity-0 group-hover:opacity-100"
+                            title="블랙리스트 추가"
+                          >
+                            <UserX size={16} />
+                          </Button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(comment.commentId)}
+                          className="p-2 rounded-lg text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (
@@ -1746,6 +1769,82 @@ function CommentManagementView() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pagination UI */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 mt-6 bg-slate-900/40 border border-slate-800 rounded-xl">
+          <div className="flex flex-1 justify-between sm:hidden">
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+              disabled={currentPage === 0}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+              disabled={currentPage === totalPages - 1}
+              className="ml-3"
+            >
+              Next
+            </Button>
+          </div>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs text-slate-500">
+                Showing <span className="font-bold text-slate-200">{currentPage * pageSize + 1}</span> to{' '}
+                <span className="font-bold text-slate-200">
+                  {Math.min((currentPage + 1) * pageSize, totalElements)}
+                </span> of{' '}
+                <span className="font-bold text-slate-200">{totalElements}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="isolate inline-flex -space-x-px rounded-lg shadow-sm" aria-label="Pagination">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                  disabled={currentPage === 0}
+                  className="relative inline-flex items-center rounded-l-lg px-2 py-2 text-slate-500 ring-1 ring-inset ring-slate-800 hover:bg-slate-800 focus:z-20 focus:outline-offset-0 disabled:opacity-30"
+                >
+                  <span className="sr-only">Previous</span>
+                  <RotateCcw size={16} className="rotate-180" />
+                </button>
+
+                {[...Array(totalPages)].map((_, i) => {
+                  if (i === 0 || i === totalPages - 1 || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        className={`relative inline-flex items-center px-4 py-2 text-xs font-bold transition-all ${currentPage === i
+                          ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600'
+                          : 'text-slate-400 ring-1 ring-inset ring-slate-800 hover:bg-slate-800 focus:z-20 focus:outline-offset-0'
+                          }`}
+                      >
+                        {i + 1}
+                      </button>
+                    )
+                  }
+                  if (i === 1 || i === totalPages - 2) {
+                    return <span key={i} className="relative inline-flex items-center px-4 py-2 text-xs font-bold text-slate-600 ring-1 ring-inset ring-slate-800 focus:outline-none">...</span>
+                  }
+                  return null;
+                })}
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                  disabled={currentPage === totalPages - 1}
+                  className="relative inline-flex items-center rounded-r-lg px-2 py-2 text-slate-500 ring-1 ring-inset ring-slate-800 hover:bg-slate-800 focus:z-20 focus:outline-offset-0 disabled:opacity-30"
+                >
+                  <span className="sr-only">Next</span>
+                  <RotateCcw size={16} />
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

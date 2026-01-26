@@ -101,9 +101,9 @@ export default function CommentManagement() {
                           {comment.content}
                         </p>
                         {comment.contentUrl && (
-                          <a 
-                            href={comment.contentUrl} 
-                            target="_blank" 
+                          <a
+                            href={comment.contentUrl}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-blue-600 hover:underline mt-1 inline-block"
                           >
@@ -131,11 +131,10 @@ export default function CommentManagement() {
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-2">
                       {comment.isAnalyzed ? (
-                        <span className={`px-2 py-1 text-xs rounded inline-flex items-center ${
-                          comment.isMalicious 
-                            ? 'bg-red-100 text-red-800' 
+                        <span className={`px-2 py-1 text-xs rounded inline-flex items-center ${comment.isMalicious
+                            ? 'bg-red-100 text-red-800'
                             : 'bg-green-100 text-green-800'
-                        }`}>
+                          }`}>
                           {comment.isMalicious && (
                             <AlertTriangle className="h-3 w-3 mr-1" />
                           )}
@@ -152,7 +151,7 @@ export default function CommentManagement() {
                         </span>
                       )}
                       {comment.containsBlockedWord && (
-                        <span 
+                        <span
                           className="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800 inline-flex items-center"
                           title={`차단 단어 포함: ${comment.matchedBlockedWord}`}
                         >
@@ -162,7 +161,7 @@ export default function CommentManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500">
-                    {comment.commentedAt 
+                    {comment.commentedAt
                       ? new Date(comment.commentedAt).toLocaleDateString()
                       : new Date(comment.createdAt).toLocaleDateString()
                     }
@@ -211,8 +210,8 @@ export default function CommentManagement() {
 
       {/* Comment Detail Modal */}
       {selectedComment && (
-        <CommentDetailModal 
-          comment={selectedComment} 
+        <CommentDetailModal
+          comment={selectedComment}
           onClose={() => setSelectedComment(null)}
           onAddToBlacklist={handleAddToBlacklist}
         />
@@ -272,17 +271,16 @@ function CommentDetailModal({ comment, onClose, onAddToBlacklist }) {
         {/* Comment Content */}
         <div className="mb-6">
           <h3 className="font-semibold text-gray-700 mb-2">Comment Text</h3>
-          <div className={`p-4 rounded-lg border ${
-            comment.isMalicious 
-              ? 'bg-red-50 border-red-200' 
+          <div className={`p-4 rounded-lg border ${comment.isMalicious
+              ? 'bg-red-50 border-red-200'
               : 'bg-gray-50 border-gray-200'
-          }`}>
+            }`}>
             <p className="text-gray-800 whitespace-pre-wrap">{comment.content}</p>
           </div>
           {comment.contentUrl && (
-            <a 
-              href={comment.contentUrl} 
-              target="_blank" 
+            <a
+              href={comment.contentUrl}
+              target="_blank"
               rel="noopener noreferrer"
               className="inline-block mt-2 text-sm text-blue-600 hover:underline"
             >
@@ -295,9 +293,8 @@ function CommentDetailModal({ comment, onClose, onAddToBlacklist }) {
         {comment.isAnalyzed && (
           <div className="mb-6">
             <h3 className="font-semibold text-gray-700 mb-2">Analysis Result</h3>
-            <div className={`p-4 rounded-lg ${
-              comment.isMalicious ? 'bg-red-50' : 'bg-green-50'
-            }`}>
+            <div className={`p-4 rounded-lg ${comment.isMalicious ? 'bg-red-50' : 'bg-green-50'
+              }`}>
               <div className="flex items-center">
                 {comment.isMalicious ? (
                   <>

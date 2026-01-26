@@ -7,6 +7,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
 
 import java.time.LocalDateTime;
@@ -77,6 +79,11 @@ public class CommentService {
 
                     LocalDateTime commentedAt = parseRelativeDate(publishDateStr);
 
+                    // 기간 필터링 적용 (크롤링 시점에서도 필터링)
+                    if (commentedAt.isBefore(limitStart) || commentedAt.isAfter(limitEnd)) {
+                        continue;
+                    }
+
                     // 중복 체크
                     if (externalId != null && !externalId.isEmpty()
                             && commentRepository.existsByUserIdAndExternalCommentId(userId, externalId)) {
@@ -94,7 +101,7 @@ public class CommentService {
                             .externalCommentId(
                                     externalId != null && !externalId.isEmpty() ? externalId
                                             : UUID.randomUUID().toString())
-                            .content(text) // Corrected field name
+                            .content(text)
                             .commentedAt(commentedAt)
                             .isAnalyzed(false)
                             .isMalicious(false)
@@ -132,7 +139,17 @@ public class CommentService {
             return now;
 
         try {
-            // 숫자 추출
+            // 절대 날짜 형식 처리 (예: "2024. 1. 20.", "2024-01-20")
+            String cleanDate = relativeTime.replaceAll("[^0-9.\\-]", "");
+            if (cleanDate.matches("\\d{4}[.\\-]\\d{1,2}[.\\-]\\d{1,2}.?")) {
+                String[] parts = cleanDate.split("[.\\-]");
+                int year = Integer.parseInt(parts[0]);
+                int month = Integer.parseInt(parts[1]);
+                int day = Integer.parseInt(parts[2].replaceAll("[^0-9]", ""));
+                return java.time.LocalDate.of(year, month, day).atStartOfDay();
+            }
+
+            // 상대적 시간 처리
             String numericPart = relativeTime.replaceAll("[^0-9]", "");
             int amount = numericPart.isEmpty() ? 1 : Integer.parseInt(numericPart);
 
@@ -153,7 +170,7 @@ public class CommentService {
                 return now.minusYears(amount);
             }
         } catch (Exception e) {
-            System.err.println("Failed to parse relative date: " + relativeTime);
+            System.err.println("Failed to parse date: " + relativeTime + " - " + e.getMessage());
         }
         return now;
     }
@@ -194,10 +211,10 @@ public class CommentService {
      * 댓글 목록 조회
      */
     @Transactional(readOnly = true)
-    public List<Comment> getComments(Long userId, String url, String startDateStr, String endDateStr,
-            Boolean isMalicious) {
+    public Page<Comment> getComments(Long userId, String url, String startDateStr, String endDateStr,
+            Boolean isMalicious, Pageable pageable) {
         System.out.println("[DEBUG] getComments with period: " + startDateStr + " ~ " + endDateStr + ", isMalicious: "
-                + isMalicious);
+                + isMalicious + ", page: " + pageable.getPageNumber());
 
         // 날짜 파싱 (기본값 설정)
         java.time.LocalDateTime start = (startDateStr != null && !startDateStr.isEmpty())
@@ -207,31 +224,38 @@ public class CommentService {
                 ? java.time.LocalDate.parse(endDateStr).atTime(23, 59, 59)
                 : java.time.LocalDateTime.now();
 
-        List<Comment> comments;
+        Page<Comment> commentsPage;
 
         if (url != null && !url.isEmpty()) {
+            System.out.println("[DEBUG] Querying by URL: [" + url + "], range: " + start + " ~ " + end);
             if (isMalicious != null) {
-                comments = commentRepository.findByUserIdAndContentUrlAndIsMaliciousAndCommentedAtBetween(userId, url,
-                        isMalicious, start, end);
+                commentsPage = commentRepository.findByUserIdAndContentUrlAndIsMaliciousAndCommentedAtBetween(userId,
+                        url,
+                        isMalicious, start, end, pageable);
             } else {
-                comments = commentRepository.findByUserIdAndContentUrlAndCommentedAtBetween(userId, url, start, end);
+                commentsPage = commentRepository.findByUserIdAndContentUrlAndCommentedAtBetween(userId, url, start, end,
+                        pageable);
             }
         } else {
+            System.out.println("[DEBUG] Querying all for user: " + userId + ", range: " + start + " ~ " + end);
             if (isMalicious != null) {
-                comments = commentRepository.findByUserIdAndIsMaliciousAndCommentedAtBetween(userId, isMalicious, start,
-                        end);
+                commentsPage = commentRepository.findByUserIdAndIsMaliciousAndCommentedAtBetween(userId, isMalicious,
+                        start,
+                        end, pageable);
             } else {
-                comments = commentRepository.findByUserIdAndCommentedAtBetween(userId, start, end);
+                commentsPage = commentRepository.findByUserIdAndCommentedAtBetween(userId, start, end, pageable);
             }
         }
+
+        System.out.println("[DEBUG] Found comments count: " + commentsPage.getTotalElements());
 
         // 🔥 차단 단어 체크 (blockedWords)
         List<BlockedWord> blockedWords = blockedWordService.getActiveBlockedWords(userId);
-        for (Comment comment : comments) {
+        for (Comment comment : commentsPage.getContent()) {
             checkBlockedWords(comment, blockedWords);
         }
 
-        return comments;
+        return commentsPage;
     }
 
     /**

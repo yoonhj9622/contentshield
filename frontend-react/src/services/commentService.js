@@ -13,13 +13,15 @@ export const commentService = {
     },
 
     // 댓글 목록 조회
-    getComments: async (url, startDate, endDate, status) => {
+    getComments: async (url, startDate, endDate, status, page = 0, size = 20) => {
         try {
             const params = {};
             if (url) params.url = url;
             if (startDate) params.startDate = startDate;
             if (endDate) params.endDate = endDate;
             if (status && status !== 'all') params.status = status;
+            params.page = page;
+            params.size = size;
 
             const response = await api.get('/comments', { params });
             return response.data;

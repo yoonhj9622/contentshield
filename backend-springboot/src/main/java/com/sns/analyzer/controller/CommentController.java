@@ -4,6 +4,9 @@ import com.sns.analyzer.entity.Comment;
 import com.sns.analyzer.service.CommentService;
 import com.sns.analyzer.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -48,11 +51,13 @@ public class CommentController {
             @RequestParam(required = false) String url,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         try {
             Long userId = getUserId(authentication);
             System.out.println("[DEBUG] getComments called for userId: " + userId + ", url: " + url + ", period: "
-                    + startDate + "~" + endDate + ", status: " + status);
+                    + startDate + "~" + endDate + ", status: " + status + ", page: " + page + ", size: " + size);
 
             Boolean isMalicious = null;
             if ("malicious".equalsIgnoreCase(status)) {
@@ -61,8 +66,9 @@ public class CommentController {
                 isMalicious = false;
             }
 
-            List<Comment> comments = commentService.getComments(userId, url, startDate, endDate, isMalicious);
-            return ResponseEntity.ok(comments);
+            Pageable pageable = PageRequest.of(page, size, Sort.by("commentedAt").descending());
+            return ResponseEntity
+                    .ok(commentService.getComments(userId, url, startDate, endDate, isMalicious, pageable));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
