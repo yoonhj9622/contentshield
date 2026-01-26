@@ -1235,7 +1235,18 @@ function CommentManagementView() {
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const pageSize = 10;
 
-  // 초기 댓글 목록 로드
+  // Refs for tracking latest state in async loops (avoid stale closures)
+  const currentPageRef = React.useRef(currentPage);
+  const lastAnalyzedUrlRef = React.useRef(lastAnalyzedUrl);
+  const startDateRef = React.useRef(startDate);
+  const endDateRef = React.useRef(endDate);
+  const filterStatusRef = React.useRef(filterStatus);
+
+  useEffect(() => { currentPageRef.current = currentPage; }, [currentPage]);
+  useEffect(() => { lastAnalyzedUrlRef.current = lastAnalyzedUrl; }, [lastAnalyzedUrl]);
+  useEffect(() => { startDateRef.current = startDate; }, [startDate]);
+  useEffect(() => { endDateRef.current = endDate; }, [endDate]);
+  useEffect(() => { filterStatusRef.current = filterStatus; }, [filterStatus]);
   useEffect(() => {
     loadComments();
     // 기본 날짜 설정 (최근 1주일)
@@ -1270,13 +1281,13 @@ function CommentManagementView() {
         };
         setLastAnalyzedUrl(''); // Clear current URL context
       } else {
-        const targetUrl = overrideUrl !== null ? overrideUrl : lastAnalyzedUrl;
+        const targetUrl = overrideUrl !== null ? overrideUrl : lastAnalyzedUrlRef.current;
         data = await commentService.getComments(
           targetUrl,
-          startDate,
-          endDate,
-          filterStatus,
-          currentPage,
+          startDateRef.current,
+          endDateRef.current,
+          filterStatusRef.current,
+          currentPageRef.current,
           pageSize
         );
       }
@@ -1393,14 +1404,26 @@ function CommentManagementView() {
     for (let i = 0; i < totalPagesToAnalyze; i++) {
       setLoadingStatus(`분석 진행 중: ${i + 1} / ${totalPagesToAnalyze} 페이지...`);
       try {
-        const pageData = await commentService.getComments(targetUrl, startDate, endDate, 'all', i, pageSize);
+        // Use refs to get latest state during the long loop
+        const pageData = await commentService.getComments(
+          targetUrl,
+          startDateRef.current,
+          endDateRef.current,
+          'all',
+          i,
+          pageSize
+        );
+
         const unanalyzedIds = pageData.content.filter(c => !c.isAnalyzed).map(c => c.commentId);
         if (unanalyzedIds.length > 0) {
           await commentService.analyzeBatch(unanalyzedIds);
         }
-        if (currentPage === i) {
+
+        // If the user is currently looking at THIS page, refresh the UI
+        if (currentPageRef.current === i) {
           await loadComments(targetUrl);
         }
+
         setAnalysisProgress(Math.round(((i + 1) / totalPagesToAnalyze) * 100));
       } catch (error) {
         console.error(`Page ${i + 1} analysis failed:`, error);
