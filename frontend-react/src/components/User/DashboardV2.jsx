@@ -41,8 +41,8 @@ const Button = ({ children, variant = "primary", className = "", ...props }) => 
 };
 
 const Input = (props) => <input className="flex h-10 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" {...props} />;
+// 장소영~여기까지: Textarea 기본 스타일 (w-full은 기본 포함)
 const Textarea = (props) => <textarea className="flex min-h-[80px] w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all placeholder:text-slate-600" {...props} />;
-
 // --- [메인 컴포넌트] ---
 export default function DashboardV2() {
   const { pathname } = useLocation();
@@ -818,7 +818,7 @@ function CommentAnalysisView() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-8 animate-in zoom-in-95 duration-500">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in zoom-in-95 duration-500">
       <div className="text-center space-y-2">
         <div className="inline-flex p-3 rounded-2xl bg-blue-600/10 text-blue-500 mb-2">
           <Search size={32} />
@@ -828,12 +828,12 @@ function CommentAnalysisView() {
       </div>
 
       <Card className="border-blue-900/30 bg-slate-900/80 backdrop-blur">
-        <CardContent className="p-8 space-y-6">
+        <CardContent className="p-4 space-y-6">
           <Textarea
             placeholder="분석할 댓글이나 문장을 입력하세요..."
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="h-48 bg-slate-950/50 border-slate-800 text-lg p-6"
+            className="w-full h-64 bg-slate-950/50 border-slate-800 text-lg p-6"
           />
           <Button
             className="w-full h-14 text-lg font-bold shadow-blue-600/20"
@@ -1730,12 +1730,26 @@ function CommentManagementView() {
                       </div>
                     </td>
                     <td className="p-4 align-top text-right">
-                      <button
-                        onClick={() => handleDelete(comment.commentId)}
-                        className="p-2 rounded-lg text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex flex-row items-center justify-end gap-1">
+                        {/* 블랙리스트 추가 버튼 (악성 댓글만 표시) */}
+                        {comment.isMalicious && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddToBlacklist(comment)}
+                            className="text-slate-500 hover:text-orange-400 opacity-0 group-hover:opacity-100"
+                            title="블랙리스트 추가"
+                          >
+                            <UserX size={16} />
+                          </Button>
+                        )}
+                        <button
+                          onClick={() => handleDelete(comment.commentId)}
+                          className="p-2 rounded-lg text-slate-600 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )) : (

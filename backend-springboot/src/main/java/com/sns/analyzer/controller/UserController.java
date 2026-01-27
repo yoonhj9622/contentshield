@@ -3,12 +3,14 @@ package com.sns.analyzer.controller;
 import com.sns.analyzer.entity.*;
 import com.sns.analyzer.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.HashMap;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
@@ -50,12 +52,21 @@ public class UserController {
      */
     @GetMapping("/profile")
     public ResponseEntity<?> getProfile(Authentication authentication) {
-        Long userId = getUserIdFromAuth(authentication);
-        
-        UserProfile profile = userService.getProfile(userId)
-            .orElseThrow(() -> new IllegalArgumentException("Profile not found"));
-        
-        return ResponseEntity.ok(profile);
+        try {
+            Long userId = getUserIdFromAuth(authentication);
+            
+            // 프로필이 없으면 기본 프로필 생성
+            UserProfile profile = userService.getProfile(userId)
+                .orElseGet(() -> {
+                    log.info("Profile not found for user {}, creating default profile", userId);
+                    return userService.createDefaultProfileForUser(userId);
+                });
+            
+            return ResponseEntity.ok(profile);
+        } catch (Exception e) {
+            log.error("Failed to get profile: {}", e.getMessage());
+            return ResponseEntity.status(500).body(Map.of("error", e.getMessage()));
+        }
     }
     
     /**

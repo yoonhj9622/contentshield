@@ -200,7 +200,17 @@ public class UserService {
         return savedUser;
     }
     
-    private void createDefaultProfile(Long userId) {
+    
+    /**
+     * 기존 사용자를 위한 기본 프로필 생성 (public 메서드)
+     */
+    public UserProfile createDefaultProfileForUser(Long userId) {
+        // 이미 프로필이 있는지 확인
+        Optional<UserProfile> existing = profileRepository.findByUserId(userId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        
         UserProfile profile = UserProfile.builder()
             .userId(userId)
             .language("ko")
@@ -211,7 +221,11 @@ public class UserService {
             .createdAt(LocalDateTime.now())
             .build();
         
-        profileRepository.save(profile);
+        return profileRepository.save(profile);
+    }
+    
+    private void createDefaultProfile(Long userId) {
+        createDefaultProfileForUser(userId);
     }
     
     private void createDefaultSubscription(Long userId) {
