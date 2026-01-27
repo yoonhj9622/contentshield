@@ -7,7 +7,7 @@ Llama-Guard-4-12b (필터링) + Llama-3.1-8b-instant (분석)
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import logging
 import os
 from datetime import datetime
@@ -128,7 +128,7 @@ class QuickAnalysis(BaseModel):
 
 class SuggestionOption(BaseModel):
     """AI 제안 옵션"""
-    version: int
+    version: Union[int, str]
     text: str
     tone: str
     reasoning: str
@@ -362,7 +362,16 @@ Provide your safety assessment for User's message:
     async def _llama_analysis(self, text: str, language: str) -> Dict[str, Any]:
         """Llama 3.1 상세 분석"""
         try:
-            system_prompt = """You are an expert in analyzing toxic and harmful content.
+            # 언어 감지 (파라미터가 없거나 불확실할 때)
+            lang = language
+            if not lang or lang not in ("ko", "en"):
+                if re.search(r"[가-힣]", text):
+                    lang = "ko"
+                else:
+                    lang = "en"
+            
+            if lang == "ko":
+                system_prompt = """You are an expert in analyzing toxic and harmful content.
 Analyze the given text and provide detailed scores (0-100) for each category.
 
 Respond in valid JSON format only, no markdown:
@@ -373,10 +382,24 @@ Respond in valid JSON format only, no markdown:
   "threat_score": <0-100>,
   "violence_score": <0-100>,
   "sexual_score": <0-100>,
-  "reasoning": "<brief explanation in same language as input>"
+  "reasoning": "<brief explanation in KOREAN>"
 }"""
+                user_prompt = f'다음 텍스트의 유해성을 분석해주세요: "{text}"'
+            else:
+                system_prompt = """You are an expert in analyzing toxic and harmful content.
+Analyze the given text and provide detailed scores (0-100) for each category.
 
-            user_prompt = f'Analyze this text for harmful content: "{text}"'
+Respond in valid JSON format only, no markdown:
+{
+  "toxicity_score": <0-100>,
+  "hate_speech_score": <0-100>,
+  "profanity_score": <0-100>,
+  "threat_score": <0-100>,
+  "violence_score": <0-100>,
+  "sexual_score": <0-100>,
+  "reasoning": "<brief explanation in English>"
+}"""
+                user_prompt = f'Analyze this text for harmful content: "{text}"'
             
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
@@ -679,6 +702,7 @@ Respond in valid JSON format only, no markdown:
             logger.error(f"❌ JSON 파싱 예외: {e}")
             return None
 
+#소영님
 # ==================== 🆕 AI Writing Assistant Service ====================
 
 class AIWritingAssistant:
@@ -698,7 +722,7 @@ class AIWritingAssistant:
             "formal": "격식있고 전문적인",
             "casual": "편안하고 자연스러운"
         }
-        
+
         # 상황별 프롬프트 템플릿
         self.situation_templates = {
             "promotion": "홍보/마케팅 게시글",
@@ -707,8 +731,43 @@ class AIWritingAssistant:
             "explanation": "상황 설명",
             "feedback_request": "건설적 피드백 요청"
         }
+
+        # 장소영~여기까지: 영어 출력 지원을 위한 EN 매핑/언어감지 유틸 추가
+        self.tone_mapping_en = {
+            "polite": "polite and respectful",
+            "neutral": "neutral and objective",
+            "friendly": "friendly and warm",
+            "formal": "formal and professional",
+            "casual": "casual and natural"
+        }
+
+        self.situation_templates_en = {
+            "promotion": "a promotional/marketing post",
+            "announcement": "an announcement / community notice",
+            "apology": "an apology / clarification",
+            "explanation": "an explanation",
+            "feedback_request": "a constructive feedback request"
+        }
+
+        def _detect_language_simple(text: str) -> str:
+            if not text:
+                return "en"
+            if re.search(r"[가-힣]", text):
+                return "ko"
+            return "en"
+
+        self._detect_language_simple = _detect_language_simple
+        # 장소영~여기까지
         
         logger.info("AI Writing Assistant initialized")
+
+    # 장소영~여기까지: language 파라미터가 ko/en이 아니거나 누락되면 입력 텍스트로 자동 감지
+    def _resolve_language(self, text: str, language: str = "ko") -> str:
+        lang = (language or "").strip().lower()
+        if lang not in ("ko", "en"):
+            lang = self._detect_language_simple(text)
+        return lang
+    # 장소영~여기까지
     
     async def quick_analyze(
         self, 
@@ -717,34 +776,38 @@ class AIWritingAssistant:
     ) -> QuickAnalysis:
         """빠른 감정/위험도 분석"""
         try:
+            # 장소영~여기까지: quick_analyze도 입력 기반 언어 자동 보정
+            language = self._resolve_language(text, language)
+            # 장소영~여기까지
+
             # 기존 analyzer 활용 (Guard + Llama 3.1)
             analysis_result = await self.analyzer.analyze_text(text, language, use_dual_model=True)
             
             # 감정 톤 판별
             if analysis_result.toxicity_score > 60:
-                emotion_tone = "부정적"
+                emotion_tone = "부정적" if language == "ko" else "Negative"
             elif analysis_result.toxicity_score < 30:
-                emotion_tone = "긍정적"
+                emotion_tone = "긍정적" if language == "ko" else "Positive"
             else:
-                emotion_tone = "중립적"
+                emotion_tone = "중립적" if language == "ko" else "Neutral"
             
             # 위험도 판별
             if analysis_result.is_malicious or analysis_result.toxicity_score > 70:
-                risk_level = "위험"
+                risk_level = "위험" if language == "ko" else "High"
             elif analysis_result.toxicity_score > 40:
-                risk_level = "주의"
+                risk_level = "주의" if language == "ko" else "Medium"
             else:
-                risk_level = "안전"
+                risk_level = "안전" if language == "ko" else "Low"
             
             # 오해 가능성 판별
             if analysis_result.toxicity_score > 50:
-                misunderstanding_risk = "높음"
+                misunderstanding_risk = "높음" if language == "ko" else "High"
             elif analysis_result.toxicity_score > 30:
-                misunderstanding_risk = "있음"
+                misunderstanding_risk = "있음" if language == "ko" else "Some"
             elif analysis_result.toxicity_score > 15:
-                misunderstanding_risk = "낮음"
+                misunderstanding_risk = "낮음" if language == "ko" else "Low"
             else:
-                misunderstanding_risk = "없음"
+                misunderstanding_risk = "없음" if language == "ko" else "None"
             
             return QuickAnalysis(
                 emotion_tone=emotion_tone,
@@ -774,13 +837,16 @@ class AIWritingAssistant:
     ) -> List[SuggestionOption]:
         """텍스트 개선 (3가지 버전 생성)"""
         try:
-            # ✨ 이 로그 추가
             logger.info(f"🔄 Starting text improvement: text='{text[:30]}...', tone={tone}")
-            tone_ko = self.tone_mapping.get(tone, "공손하고 정중한")
-            
-            # 프롬프트 작성
-            system_prompt = f"""당신은 전문 콘텐츠 에디터입니다. 
-사용자의 텍스트를 {tone_ko} 톤으로 개선하여 3가지 다른 버전을 제안하세요.
+
+            # 장소영~여기까지: 입력 기반 언어 자동 감지 + 프롬프트를 ko/en로 분기
+            language = self._resolve_language(text, language)
+
+            if language == "ko":
+                tone_label = self.tone_mapping.get(tone, "공손하고 정중한")
+
+                system_prompt = f"""당신은 전문 콘텐츠 에디터입니다. 
+사용자의 텍스트를 {tone_label} 톤으로 개선하여 3가지 다른 버전을 제안하세요.
 
 요구사항:
 1. 원문의 핵심 의미는 유지
@@ -816,13 +882,57 @@ class AIWritingAssistant:
   ]
 }}"""
 
-            user_prompt = f"""원본 텍스트: "{text}"
+                user_prompt = f"""원본 텍스트: "{text}"
 {'추가 지시사항: ' + instruction if instruction else ''}
 
-위 텍스트를 {tone_ko} 톤으로 3가지 버전으로 개선해주세요."""
+위 텍스트를 {tone_label} 톤으로 3가지 버전으로 개선해주세요."""
+            else:
+                tone_label = self.tone_mapping_en.get(tone, "polite and respectful")
+
+                system_prompt = f"""You are a professional content editor.
+Rewrite the user's text in a {tone_label} tone and propose 3 distinct versions.
+
+Requirements:
+1. Keep the original meaning
+2. Make it clear and reduce misunderstanding
+3. Remove profanity, insults, and aggressive wording
+4. Each version should differ in style/intensity
+5. Suitable length for YouTube comments/community posts (2-5 lines)
+
+Return JSON ONLY (no markdown, no extra text):
+{{
+  "suggestions": [
+    {{
+      "version": 1,
+      "text": "Improved version 1 (most polite)",
+      "tone": "Very polite",
+      "reasoning": "Why this is better",
+      "confidence": 0.95
+    }},
+    {{
+      "version": 2,
+      "text": "Improved version 2 (neutral)",
+      "tone": "Neutral",
+      "reasoning": "Why this is better",
+      "confidence": 0.90
+    }},
+    {{
+      "version": 3,
+      "text": "Improved version 3 (friendly)",
+      "tone": "Friendly",
+      "reasoning": "Why this is better",
+      "confidence": 0.88
+    }}
+  ]
+}}"""
+
+                user_prompt = f"""Original text: "{text}"
+{('Additional instruction: ' + instruction) if instruction else ''}
+
+Please rewrite the text into 3 versions in a {tone_label} tone."""
+            # 장소영~여기까지
 
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # ✨ 이 로그 추가
                 logger.info(f"📤 Sending request to Groq API...")
                 response = await client.post(
                     self.base_url,
@@ -840,31 +950,34 @@ class AIWritingAssistant:
                         "max_tokens": 1500
                     }
                 )
-                # ✨ 이 로그 추가
                 logger.info(f"📥 Groq API response: status={response.status_code}")
             
             if response.status_code == 200:
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
-                # ✨ 이 로그 추가
-                # 전체 응답을 파일로 저장 (디버깅용)
                 logger.info(f"📝 Groq response length: {len(content)} characters")
-                # 전체 내용은 파싱만 하고 로그는 안 함 (너무 길어서)
                 
-                # JSON 파싱
                 json_result = self.analyzer._extract_json(content)
                 
                 if json_result and "suggestions" in json_result:
                     suggestions = []
                     for item in json_result["suggestions"]:
+                        # 텍스트는 원본 그대로 (톤 정보 제거)
+                        text_val = item.get("text", "")
+                        
+                        # 버전에 톤 정보 추가 (사용자 요청)
+                        tone_val = item.get("tone", "")
+                        version_val = item.get("version", 1)
+                        if tone_val:
+                            version_val = f"{version_val} ({tone_val})"
+
                         suggestions.append(SuggestionOption(
-                            version=item.get("version", 1),
-                            text=item.get("text", ""),
+                            version=version_val,
+                            text=text_val,
                             tone=item.get("tone", tone),
                             reasoning=item.get("reasoning", ""),
                             confidence=item.get("confidence", 0.85)
                         ))
-                    
                     logger.info(f"Generated {len(suggestions)} improved versions")
                     return suggestions
                 else:
@@ -887,17 +1000,19 @@ class AIWritingAssistant:
     ) -> List[SuggestionOption]:
         """댓글 답변 생성 (3가지 버전)"""
         try:
-            # 답변 유형 매핑
-            reply_types_ko = {
-                "constructive": "건설적이고 발전적인",
-                "grateful": "감사하고 겸손한",
-                "apologetic": "사과하고 해명하는",
-                "defensive": "방어적이지만 예의있는"
-            }
-            
-            reply_tone = reply_types_ko.get(reply_type, "건설적이고 발전적인")
-            
-            system_prompt = f"""당신은 유튜브 크리에이터의 커뮤니티 매니저입니다.
+            # 장소영~여기까지: 입력 기반 언어 자동 감지 + 프롬프트 ko/en 분기
+            language = self._resolve_language(original_comment, language)
+
+            if language == "ko":
+                reply_types_ko = {
+                    "constructive": "건설적이고 발전적인",
+                    "grateful": "감사하고 겸손한",
+                    "apologetic": "사과하고 해명하는",
+                    "defensive": "방어적이지만 예의있는"
+                }
+                reply_tone = reply_types_ko.get(reply_type, "건설적이고 발전적인")
+
+                system_prompt = f"""당신은 유튜브 크리에이터의 커뮤니티 매니저입니다.
 악성 댓글이나 비판적 댓글에 대해 {reply_tone} 답변을 3가지 버전으로 생성하세요.
 
 원칙:
@@ -926,7 +1041,7 @@ class AIWritingAssistant:
     }},
     {{
       "version": 3,
-      "text": "답변 버전 3 (법적 경고 포함)",
+      "text": "답변 버전 3 (단호하지만 예의있음)",
       "tone": "단호하지만 예의있음",
       "reasoning": "이 답변을 선택한 이유",
       "confidence": 0.85
@@ -934,11 +1049,61 @@ class AIWritingAssistant:
   ]
 }}"""
 
-            context_text = f"\n영상/게시글 내용: {context}" if context else ""
-            
-            user_prompt = f"""원본 댓글: "{original_comment}"{context_text}
+                context_text = f"\n영상/게시글 내용: {context}" if context else ""
+                user_prompt = f"""원본 댓글: "{original_comment}"{context_text}
 
 위 댓글에 대한 {reply_tone} 답변을 3가지 버전으로 생성해주세요."""
+            else:
+                reply_types_en = {
+                    "constructive": "constructive and solution-oriented",
+                    "grateful": "grateful and humble",
+                    "apologetic": "apologetic and clarifying",
+                    "defensive": "firm but polite"
+                }
+                reply_tone = reply_types_en.get(reply_type, "constructive and solution-oriented")
+
+                system_prompt = f"""You are a community manager for a YouTube creator.
+Generate 3 reply options to a critical/negative comment in a {reply_tone} style.
+
+Rules:
+1. Never use profanity or insults
+2. Prioritize maintaining a healthy relationship with viewers
+3. Avoid legal-risky statements
+4. Protect brand image
+5. Each version should differ in approach/intensity
+
+Return JSON ONLY (no markdown, no extra text):
+{{
+  "suggestions": [
+    {{
+      "version": 1,
+      "text": "Reply version 1 (most polite)",
+      "tone": "Very polite",
+      "reasoning": "Why this reply works",
+      "confidence": 0.92
+    }},
+    {{
+      "version": 2,
+      "text": "Reply version 2 (neutral)",
+      "tone": "Neutral",
+      "reasoning": "Why this reply works",
+      "confidence": 0.88
+    }},
+    {{
+      "version": 3,
+      "text": "Reply version 3 (firm but polite)",
+      "tone": "Firm but polite",
+      "reasoning": "Why this reply works",
+      "confidence": 0.85
+    }}
+  ]
+}}"""
+
+                context_text = f"\nContext (video/post): {context}" if context else ""
+                user_prompt = f"""Original comment: "{original_comment}"{context_text}
+
+Please generate 3 reply options in a {reply_tone} style."""
+            # 장소영~여기까지
 
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
@@ -969,10 +1134,15 @@ class AIWritingAssistant:
                 if json_result and "suggestions" in json_result:
                     suggestions = []
                     for item in json_result["suggestions"]:
+                        tone_val = item.get("tone", reply_type)
+                        version_val = item.get("version", 1)
+                        if tone_val:
+                            version_val = f"{version_val} ({tone_val})"
+
                         suggestions.append(SuggestionOption(
-                            version=item.get("version", 1),
+                            version=version_val,
                             text=item.get("text", ""),
-                            tone=item.get("tone", reply_type),
+                            tone=tone_val,
                             reasoning=item.get("reasoning", ""),
                             confidence=item.get("confidence", 0.85)
                         ))
@@ -999,10 +1169,15 @@ class AIWritingAssistant:
     ) -> List[SuggestionOption]:
         """상황별 템플릿 생성 (3가지 버전)"""
         try:
-            situation_ko = self.situation_templates.get(situation, "일반 게시글")
-            tone_ko = self.tone_mapping.get(tone, "전문적인")
-            
-            system_prompt = f"""당신은 소셜 미디어 콘텐츠 전문가입니다.
+            # 장소영~여기까지: topic/상황 텍스트로도 언어 감지(한국어 주제면 한국어로)
+            sample_text = (topic or "") + " " + (situation or "")
+            language = self._resolve_language(sample_text, language)
+
+            if language == "ko":
+                situation_ko = self.situation_templates.get(situation, "일반 게시글")
+                tone_ko = self.tone_mapping.get(tone, "전문적인")
+                
+                system_prompt = f"""당신은 소셜 미디어 콘텐츠 전문가입니다.
 "{situation_ko}" 상황에 맞는 게시글/댓글 템플릿을 {tone_ko} 톤으로 3가지 버전 생성하세요.
 
 요구사항:
@@ -1039,12 +1214,57 @@ class AIWritingAssistant:
   ]
 }}"""
 
-            topic_text = f"\n주제/상황: {topic}" if topic else ""
-            
-            user_prompt = f"""상황: {situation_ko}{topic_text}
+                topic_text = f"\n주제/상황: {topic}" if topic else ""
+                user_prompt = f"""상황: {situation_ko}{topic_text}
 
 위 상황에 맞는 {tone_ko} 톤의 템플릿을 3가지 버전으로 생성해주세요."""
+            else:
+                situation_en = self.situation_templates_en.get(situation, "a general post")
+                tone_en = self.tone_mapping_en.get(tone, "professional")
 
+                system_prompt = f"""You are a social media content specialist.
+Create 3 template versions for {situation_en} in a {tone_en} tone.
+
+Requirements:
+1. Suitable for YouTube community posts or comments
+2. Length: 3-7 lines
+3. Emojis allowed (use appropriately)
+4. Each version should differ in approach/length
+5. Safe wording with low legal risk
+
+Return JSON ONLY (no markdown, no extra text):
+{{
+  "suggestions": [
+    {{
+      "version": 1,
+      "text": "Template version 1 (concise)",
+      "tone": "Concise",
+      "reasoning": "Why this works",
+      "confidence": 0.90
+    }},
+    {{
+      "version": 2,
+      "text": "Template version 2 (balanced)",
+      "tone": "Balanced",
+      "reasoning": "Why this works",
+      "confidence": 0.88
+    }},
+    {{
+      "version": 3,
+      "text": "Template version 3 (detailed)",
+      "tone": "Detailed",
+      "reasoning": "Why this works",
+      "confidence": 0.85
+    }}
+  ]
+}}"""
+
+                topic_text = f"\nTopic/context: {topic}" if topic else ""
+                user_prompt = f"""Situation: {situation_en}{topic_text}
+
+Please generate 3 template versions in a {tone_en} tone."""
+            # 장소영~여기까지
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     self.base_url,
@@ -1074,10 +1294,15 @@ class AIWritingAssistant:
                 if json_result and "suggestions" in json_result:
                     suggestions = []
                     for item in json_result["suggestions"]:
+                        tone_val = item.get("tone", tone)
+                        version_val = item.get("version", 1)
+                        if tone_val:
+                            version_val = f"{version_val} ({tone_val})"
+
                         suggestions.append(SuggestionOption(
-                            version=item.get("version", 1),
+                            version=version_val,
                             text=item.get("text", ""),
-                            tone=item.get("tone", tone),
+                            tone=tone_val,
                             reasoning=item.get("reasoning", ""),
                             confidence=item.get("confidence", 0.85)
                         ))
@@ -1094,6 +1319,7 @@ class AIWritingAssistant:
         except Exception as e:
             logger.error(f"Template generation failed: {e}")
             return self._fallback_template(situation, tone)
+
     
     def _fallback_improvement(self, text: str, tone: str) -> List[SuggestionOption]:
         """텍스트 개선 폴백"""

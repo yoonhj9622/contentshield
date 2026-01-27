@@ -54,7 +54,7 @@ export default function DashboardV2() {
     { id: 'management', label: 'Comments', icon: MessageSquare, path: '/comments' },
     { id: 'blacklist', label: 'Blacklist', icon: UserX, path: '/blacklist' },
     { id: 'writing', label: 'AI Assistant', icon: Wand2, path: '/aiassistant' },
-    { id: 'templates', label: 'Templates', icon: FileText, path: '/templates' },
+    // { id: 'templates', label: 'Templates', icon: FileText, path: '/templates' },  // Removed by user request
     { id: 'stats', label: 'Statistics', icon: Activity, path: '/statistics' },
     { id: 'profile', label: 'Profile', icon: User, path: '/profile' },
   ];
@@ -96,7 +96,7 @@ export default function DashboardV2() {
           {activeTab === 'management' && <CommentManagementView />}
           {activeTab === 'blacklist' && <BlacklistView />}
           {activeTab === 'writing' && <TemplateManager />}
-          {activeTab === 'templates' && <TemplateView />}
+          {/* {activeTab === 'templates' && <TemplateView />} */}
           {activeTab === 'stats' && <StatisticsView />}
           {activeTab === 'profile' && <ProfileSettings />}
         </div>
@@ -1670,18 +1670,6 @@ function CommentManagementView() {
                 </button>
               ))}
             </div>
-
-            {lastAnalyzedUrl && (
-              <button
-                onClick={() => {
-                  setCurrentPage(0);
-                  loadComments(null, true);
-                }}
-                className="h-8 px-3 rounded-lg flex items-center gap-2 text-[10px] font-bold border border-slate-700 hover:bg-slate-800 text-slate-300 transition-all"
-              >
-                <Database size={12} /> SHOW ALL HISTORY
-              </button>
-            )}
 
             <div className="px-3 py-1 rounded-full bg-slate-800 text-[10px] font-bold text-slate-400 border border-slate-700">
               {comments.length} ITEMS {lastAnalyzedUrl ? 'FOR THIS VIDEO' : 'TOTAL'}
