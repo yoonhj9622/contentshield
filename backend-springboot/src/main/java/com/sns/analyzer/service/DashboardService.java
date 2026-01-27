@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import java.time.DayOfWeek;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -77,6 +79,7 @@ public class DashboardService {
         stats.put("weeklyActivity", weeklyActivity);
         stats.put("notifications", notifications);
         stats.put("typeBreakdown", typeBreakdown);
+        stats.put("weeklyMaliciousActivity", getWeeklyMaliciousActivity(allResults));
 
         // Blacklist Count
         int blacklistCount = blacklistService.getUserBlacklist(userId).size();
@@ -100,6 +103,36 @@ public class DashboardService {
             LocalDate date = today.minusDays(i);
             Map<String, Object> dayMap = new HashMap<>();
             dayMap.put("name", date.format(formatter)); // Mon, Tue...
+            dayMap.put("count", countsByDate.getOrDefault(date.toString(), 0L));
+            weekly.add(dayMap);
+        }
+        return weekly;
+    }
+
+    private List<Map<String, Object>> getWeeklyMaliciousActivity(List<AnalysisResult> results) {
+        LocalDate today = LocalDate.now();
+        // Calculate Monday of the current week (or today if today is Monday)
+        LocalDate startOfWeek = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate endOfWeek = startOfWeek.plusDays(6);
+
+        Map<String, Long> countsByDate = results.stream()
+                .filter(r -> Boolean.TRUE.equals(r.getIsMalicious()))
+                .filter(r -> {
+                    LocalDate d = r.getAnalyzedAt().toLocalDate();
+                    return !d.isBefore(startOfWeek) && !d.isAfter(endOfWeek);
+                })
+                .collect(Collectors.groupingBy(
+                        r -> r.getAnalyzedAt().toLocalDate().toString(),
+                        Collectors.counting()));
+
+        List<Map<String, Object>> weekly = new ArrayList<>();
+        // Use Korean locale for day names (월, 화, 수...)
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E", Locale.KOREA);
+
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = startOfWeek.plusDays(i);
+            Map<String, Object> dayMap = new HashMap<>();
+            dayMap.put("name", date.format(formatter));
             dayMap.put("count", countsByDate.getOrDefault(date.toString(), 0L));
             weekly.add(dayMap);
         }
