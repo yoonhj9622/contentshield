@@ -11,7 +11,7 @@ const PrivateRoute = ({ children, requireAdmin = false }) => {
   // 개발이 완료되면 아래 변수를 false로 바꾸거나, 
   // 하단의 [운영 모드] 주석을 해제하고 이 부분을 지우세요.
   // ==========================================================
-  const IS_DEV_MODE = true; 
+  const IS_DEV_MODE = true;
 
   if (IS_DEV_MODE) {
     return children;

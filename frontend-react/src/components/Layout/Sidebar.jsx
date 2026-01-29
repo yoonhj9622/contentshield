@@ -9,7 +9,8 @@ import {
   Wand2,
   Users,
   Bell,
-  FileText
+  FileText,
+  MessageSquare
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore'
 
@@ -44,6 +45,7 @@ export default function Sidebar() {
     { path: '/admin/users', icon: Users, label: 'User Management' },
     { path: '/admin/notices', icon: Bell, label: 'Notices' },
     { path: '/admin/logs', icon: FileText, label: 'System Logs' },
+    { path: '/admin/suggestions', icon: MessageSquare, label: 'Suggestions' },
   ]
 
   return (

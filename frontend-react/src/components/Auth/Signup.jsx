@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Shield, User, Mail, Lock, ArrowLeft } from 'lucide-react';
 
 import { authService } from '../../services/authService';
+console.log('🔥 REAL Signup.jsx loaded 🔥');
 
 export default function Signup() {
   const navigate = useNavigate();

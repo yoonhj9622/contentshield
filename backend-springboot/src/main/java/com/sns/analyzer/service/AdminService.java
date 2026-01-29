@@ -8,6 +8,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
+//장소영 추가
+import java.util.Map; // ✅ 추가
+import java.util.stream.Collectors; // (필요시)
+
 
 @Service
 @RequiredArgsConstructor
@@ -142,5 +146,29 @@ public class AdminService {
      */
     public List<User> getSuspendedUsers() {
         return userRepository.findByIsSuspended(true);
+    }
+
+    public Map<String, Long> getDashboardStats() {
+    long totalUsers = userRepository.count();
+    long activeUsers = userRepository.countByStatus(User.UserStatus.ACTIVE);
+    long suspendedUsers = userRepository.countByStatus(User.UserStatus.SUSPENDED);
+    long flaggedUsers = userRepository.countByIsFlagged(true);
+
+    return Map.of(
+        "totalUsers", totalUsers,
+        "activeUsers", activeUsers,
+        "flaggedUsers", flaggedUsers,
+        "suspendedUsers", suspendedUsers
+    );
+}
+
+    public List<AdminLog> getRecentAdminLogs(int limit) {
+        // #장소영~ 최소 수정: findAll 후 정렬/limit (데이터량 적을 때 OK)
+        // 데이터 커지면 Repository에 TopN 쿼리로 바꾸면 됨.
+        return adminLogRepository.findAll().stream()
+                .sorted((a,b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .limit(limit)
+                .toList();
+        // #여기까지
     }
 }

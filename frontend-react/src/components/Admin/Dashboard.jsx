@@ -4,51 +4,62 @@ import { adminService } from '../../services/adminService'
 import { Users, UserX, AlertTriangle, Activity } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
+// #장소영~ 토큰/rehydrate 상태로 enabled 제어
+import { useAuthStore } from '../../stores/authStore'
+// #여기까지
+
 export default function AdminDashboard() {
-  const { data: allUsers } = useQuery('adminUsers', adminService.getAllUsers)
-  const { data: flaggedUsers } = useQuery('flaggedUsers', adminService.getFlaggedUsers)
-  const { data: suspendedUsers } = useQuery('suspendedUsers', adminService.getSuspendedUsers)
+  // #장소영~ rehydrate 완료 + token 있을 때만 API 호출
+  const token = useAuthStore((s) => s.token)
+  const hasHydrated = useAuthStore((s) => s.hasHydrated)
+  const canFetch = hasHydrated && !!token
+  // #여기까지
+
+  const { data: allUsers } = useQuery({
+    queryKey: ['adminUsers'],
+    queryFn: adminService.getAllUsers,
+    // #장소영~ 토큰 준비 전에는 호출 금지(401 섞임 방지)
+    enabled: canFetch,
+    retry: false,
+    // #여기까지
+  })
+
+  const { data: flaggedUsers } = useQuery({
+    queryKey: ['flaggedUsers'],
+    queryFn: adminService.getFlaggedUsers,
+    // #장소영~
+    enabled: canFetch,
+    retry: false,
+    // #여기까지
+  })
+
+  const { data: suspendedUsers } = useQuery({
+    queryKey: ['suspendedUsers'],
+    queryFn: adminService.getSuspendedUsers,
+    // #장소영~
+    enabled: canFetch,
+    retry: false,
+    // #여기까지
+  })
 
   const stats = {
     totalUsers: allUsers?.length || 0,
     flaggedUsers: flaggedUsers?.length || 0,
     suspendedUsers: suspendedUsers?.length || 0,
-    activeUsers: (allUsers?.filter(u => u.status === 'ACTIVE').length) || 0,
+    activeUsers: allUsers?.filter((u) => u.status === 'ACTIVE').length || 0,
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold text-gray-900 mb-8">Admin Dashboard</h1>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <AdminStatCard
-          title="Total Users"
-          value={stats.totalUsers}
-          icon={Users}
-          color="blue"
-        />
-        <AdminStatCard
-          title="Active Users"
-          value={stats.activeUsers}
-          icon={Activity}
-          color="green"
-        />
-        <AdminStatCard
-          title="Flagged Users"
-          value={stats.flaggedUsers}
-          icon={AlertTriangle}
-          color="yellow"
-        />
-        <AdminStatCard
-          title="Suspended Users"
-          value={stats.suspendedUsers}
-          icon={UserX}
-          color="red"
-        />
+        <AdminStatCard title="Total Users" value={stats.totalUsers} icon={Users} color="blue" />
+        <AdminStatCard title="Active Users" value={stats.activeUsers} icon={Activity} color="green" />
+        <AdminStatCard title="Flagged Users" value={stats.flaggedUsers} icon={AlertTriangle} color="yellow" />
+        <AdminStatCard title="Suspended Users" value={stats.suspendedUsers} icon={UserX} color="red" />
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">User Growth</h2>
@@ -106,7 +117,7 @@ function AdminStatCard({ title, value, icon: Icon, color }) {
 }
 
 function generateMockGrowthData() {
-  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map(month => ({
+  return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month) => ({
     month,
     users: Math.floor(Math.random() * 100) + 50,
   }))

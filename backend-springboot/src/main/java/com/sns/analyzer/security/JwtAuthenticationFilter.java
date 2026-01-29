@@ -8,34 +8,34 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails; // #장소영~
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;  // ⭐ 이 import 추가!
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
 @Slf4j
-@Component  // ⭐ 이 어노테이션 추가!
+@Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
 
-    // ===== #장소영 JWT 필터 예외 처리 시작 =====
+    // #장소영~ 권한(authorities) 포함 인증을 위해 UserDetails 로딩
+    private final CustomUserDetailsService customUserDetailsService;
+    // #여기까지
+
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
 
-        // 로그인/회원가입 등은 토큰 없이 접근해야 하므로 JWT 필터 스킵
         if (path.startsWith("/api/auth/")) return true;
-
-        // 프리플라이트 요청 스킵 (CORS)
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) return true;
 
         return false;
     }
-    // ===== #장소영 JWT 필터 예외 처리 끝 =====
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -46,10 +46,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
                 String username = jwtTokenProvider.getUsernameFromToken(jwt);
 
-                // 권한 정보는 실제 운영 시 DB 조회가 필요할 수 있으나,
-                // 토큰 자체의 정보를 믿고 인증 객체를 생성합니다.
+                // =========================================================
+                // #장소영~ 핵심 수정: authorities 포함해서 SecurityContext 세팅
+                // - @PreAuthorize("hasRole('ADMIN')")가 동작하려면 권한이 필요함
+                // =========================================================
+                UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
+
                 UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(username, null, null);
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails,                 // principal
+                                null,
+                                userDetails.getAuthorities() // ✅ 권한 포함
+                        );
+                // #여기까지
 
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);

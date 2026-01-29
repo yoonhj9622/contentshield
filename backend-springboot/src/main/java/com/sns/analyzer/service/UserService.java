@@ -326,4 +326,49 @@ public class UserService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
     }
+
+    // =========================================================
+    // #장소영~ 서비스 이용 가능 여부 체크(핵심 기능에서 호출용)
+    // - SUSPENDED: 로그인은 가능하지만 서비스(분석 등)는 403 처리
+    // - INACTIVE/DELETED: 서비스 이용 불가
+    // - isSuspended/suspendedUntil 데이터 불일치 대비 안전망 포함
+    // =========================================================
+    public void assertServiceAvailable(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        assertServiceAvailable(user);
+    }
+
+    public void assertServiceAvailable(User user) {
+        // 1) status 기반 차단
+        if (user.getStatus() == User.UserStatus.SUSPENDED) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "SUSPENDED: service is not available"
+            );
+        }
+        if (user.getStatus() == User.UserStatus.INACTIVE || user.getStatus() == User.UserStatus.DELETED) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "INACTIVE/DELETED: service is not available"
+            );
+        }
+
+        // 2) 혹시 status와 isSuspended가 엇갈리는 데이터 대비
+        if (Boolean.TRUE.equals(user.getIsSuspended())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "SUSPENDED(isSuspended): service is not available"
+            );
+        }
+
+        // 3) 기간 정지 대비 (suspendedUntil이 미래면 차단)
+        if (user.getSuspendedUntil() != null && user.getSuspendedUntil().isAfter(LocalDateTime.now())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN,
+                    "SUSPENDED(until): service is not available"
+            );
+        }
+    }
+    // #여기까지
 }

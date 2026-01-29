@@ -32,14 +32,24 @@ public class CustomUserDetailsService implements UserDetailsService {
                         .orElseThrow(() -> new UsernameNotFoundException("User not found: " + loginId)));
         // #여기까지
 
+        // #장소영~ 시나리오 요구사항 반영
+        // - SUSPENDED는 "로그인은 되지만 서비스 이용 불가"여야 하므로 login 자체를 잠그지 않음
+        // - INACTIVE/DELETED만 로그인 자체를 막음
+        boolean disabled = (user.getStatus() == User.UserStatus.INACTIVE || user.getStatus() == User.UserStatus.DELETED);
+        // #여기까지
+
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getEmail())
                 .password(user.getPasswordHash())
                 .authorities(getAuthorities(user))
                 .accountExpired(false)
-                .accountLocked(Boolean.TRUE.equals(user.getIsSuspended()))
+                // #장소영~ 정지여도 로그인은 허용(서비스 API에서 막기)
+                .accountLocked(false)
+                // #여기까지
                 .credentialsExpired(false)
-                .disabled(user.getStatus() != User.UserStatus.ACTIVE)
+                // #장소영~ INACTIVE/DELETED만 로그인 차단
+                .disabled(disabled)
+                // #여기까지
                 .build();
     }
 
