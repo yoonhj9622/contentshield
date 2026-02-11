@@ -77,15 +77,14 @@ class RAGService:
             
             GUIDELINES:
             1. **Select Informative Columns**: SELECT `comment_text`, `author`, `toxicity_score`, `category`, `analyzed_at`.
-            2. **Instructions vs Keywords**:
-               - If the user asks for a **"summary"**, **"analysis"**, or **"list"** (e.g., "요약해줘", "분석해줘", "보여줘"), DO NOT use these words in a `LIKE` clause.
-               - ONLY use `WHERE comment_text LIKE '%keyword%'` if there is a clear subject/topic (e.g., "about pizza", "containing insults").
-               - If the request is general, OMIT the `WHERE` clause for that part.
-            3. **Strict Limit**: **ALWAYS** end your query with `LIMIT {top_k}`.
-            4. **Worst/Toxic Cases**: If asking for "worst", "bad", or "toxic", `ORDER BY toxicity_score DESC`.
-            5. **Date/Time**: If asked about "recent", filter by `analyzed_at`.
+            2. **Instructions vs Search Terms**:
+               - NEVER use words like "요약", "분석", "리스트", "보여줘", "내 채널" in the WHERE clause. These are instructions, not keywords.
+               - If the user says "내 채널의 댓글 요약해줘", your SQL should be: `SELECT ... FROM analysis_results LIMIT 10;` (NO WHERE CLAUSE).
+               - ONLY use WHERE if the user asks for a specific topic (e.g., "스포츠 관련", "정치 관련") or a specific author.
+            3. **Order**: If asked for "bad" or "toxic" comments, use `ORDER BY toxicity_score DESC`.
+            4. **Strict Limit**: ALWAYS end with `LIMIT {top_k}`.
             
-            IMPORTANT: Return ONLY the SQL query. Do not explain.
+            IMPORTANT: Return ONLY the SQL query. Do not explain anything.
             
             Only use the following tables:
             {table_info}
@@ -153,14 +152,25 @@ class RAGService:
             self.last_sql_result = state.get('result')
             return state
 
+        def final_response(state):
+            # SQL 결과가 없거나 비어있는 경우 즉시 종료
+            if not state.get("result") or state.get("result") == "[]" or state.get("result") == "":
+                return "해당 조건에 맞는 데이터가 없습니다."
+            
+            # 결과가 있는 경우에만 LLM에게 보고서 생성 요청
+            chain = (
+                answer_prompt.partial(table_info=self.db.get_table_info())
+                | target_llm
+                | StrOutputParser()
+            )
+            return chain.invoke(state)
+
         chain = (
             RunnablePassthrough.assign(query=write_query | clean_sql).assign(
                 result=itemgetter("query") | execute_query
             )
             | log_step # 로그 출력 + 결과 캡처
-            | answer_prompt.partial(table_info=self.db.get_table_info())
-            | target_llm
-            | StrOutputParser()
+            | final_response # 결과 확인 후 분기
         )
         return chain
 
