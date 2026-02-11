@@ -1804,6 +1804,27 @@ async def models_info():
 
 # ==================== 🆕 RAG Endpoints ====================
 
+class RagQueryRequest(BaseModel):
+    question: str
+
+@app.post("/rag/export")
+async def rag_export(request: RagQueryRequest):
+    """RAG 질의응답 결과를 JSON으로 반환 (프론트엔드에서 CSV 변환)"""
+    global rag_service
+    if not rag_service:
+        raise HTTPException(status_code=503, detail="RAG Service is not initialized")
+    
+    try:
+        # rag_service에서 데이터 가져오기
+        data = rag_service.get_query_results(request.question)
+        return {"data": data}
+        
+    except Exception as e:
+        logger.error(f"RAG Export Failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/rag/clear-history")
 async def clear_rag_history():
     """RAG 대화 기록 초기화"""
