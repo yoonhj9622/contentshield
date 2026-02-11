@@ -298,9 +298,9 @@ class RAGService:
                 
                 RULES:
                 1. SELECT ONLY these 5 columns in this exact order: `comment_text`, `author`, `toxicity_score`, `category`, `analyzed_at`.
-                2. If the question is about "summarizing" or "showing all" without specific filters, just SELECT with LIMIT.
-                3. For content search: `comment_text LIKE '%keyword%'`.
-                4. For author search: `author LIKE '%name%'`.
+                2. DO NOT filter by the question itself. (e.g. If question is '요약해줘', DO NOT use `WHERE comment_text LIKE '%요약해줘%'`)
+                3. If the question is a general request (summary, show all, list), OMIT the WHERE clause and just return rows.
+                4. ONLY use WHERE clause if the user specifies a clear keyword (e.g. 'about sports', 'by John').
                 5. ALWAYS end with `LIMIT 50`.
                 
                 SQL:"""
