@@ -247,30 +247,58 @@ class RAGService:
                 except Exception as fallback_e:
                     logger.error(f"Fallback failed: {fallback_e}")
                     error_msg += f" | Fallback Error: {str(fallback_e)}"
-
             return {"answer": f"죄송합니다. 현재 이용량이 많거나 질문 내용이 너무 길어 답변을 생성할 수 없습니다. \n(상세 오류: {error_msg})", "sources": [], "data": []}
     
     def _parse_sql_result_to_dict(self, sql_result_str: str) -> list:
         """SQL 결과 문자열을 딕셔너리 리스트로 변환"""
-        if not sql_result_str or sql_result_str == "[]":
+        if not sql_result_str or sql_result_str == "[]" or sql_result_str == "":
             return []
         
         try:
             import ast
+            from decimal import Decimal
+            import datetime
+            
+            # eval 시 Decimal 및 datetime 타입을 인식할 수 있도록 전역 변수 설정
+            eval_globals = {"Decimal": Decimal, "datetime": datetime}
+            
             try:
+                # ast.literal_eval은 기본 자료형만 지원함
                 data = ast.literal_eval(sql_result_str)
             except:
-                data = eval(sql_result_str)
+                # Decimal, datetime 등이 포함된 경우 eval 사용 (eval_globals로 안전성 확보)
+                data = eval(sql_result_str, eval_globals)
             
+            if not isinstance(data, list):
+                return []
+                
             # 튜플 리스트를 딕셔너리 리스트로 변환
+            # 정해진 순서: comment_text(0), author(1), toxicity_score(2), category(3), analyzed_at(4)
             result_list = []
             for row in data:
+                if not isinstance(row, (list, tuple)) or len(row) < 5:
+                    continue
+                
+                # Decimal -> float 변환
+                tox = row[2]
+                if isinstance(tox, Decimal):
+                    tox = float(tox)
+                elif not isinstance(tox, (int, float)):
+                    tox = 0.0
+                    
+                # datetime -> string 변환
+                at = row[4]
+                if isinstance(at, (datetime.datetime, datetime.date)):
+                    at = at.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    at = str(at) if at else ""
+
                 result_list.append({
-                    "댓글내용": str(row[0]) if len(row) > 0 and row[0] else "",
-                    "작성자": str(row[4]) if len(row) > 4 and row[4] else "",  # author는 5번째
-                    "위험도": float(row[1]) if len(row) > 1 and row[1] else 0.0,  # toxicity_score는 2번째
-                    "카테고리": str(row[2]) if len(row) > 2 and row[2] else "",  # category는 3번째
-                    "분석시간": str(row[3]) if len(row) > 3 and row[3] else ""  # analyzed_at는 4번째
+                    "댓글내용": str(row[0]) if row[0] else "",
+                    "작성자": str(row[1]) if row[1] else "",
+                    "위험도": tox,
+                    "카테고리": str(row[3]) if row[3] else "",
+                    "분석시간": at
                 })
             
             return result_list
@@ -360,23 +388,8 @@ class RAGService:
                 logger.warning("Export query returned empty result")
                 return []
             
-            # 결과 파싱
-            import ast
-            try:
-                data = ast.literal_eval(result)
-            except:
-                data = eval(result)
-            
-            # 딕셔너리 리스트로 변환
-            result_list = []
-            for row in data:
-                result_list.append({
-                    "댓글내용": str(row[0]) if row[0] else "",
-                    "작성자": str(row[1]) if row[1] else "",
-                    "위험도": float(row[2]) if row[2] else 0.0,
-                    "카테고리": str(row[3]) if row[3] else "",
-                    "분석시간": str(row[4]) if row[4] else ""
-                })
+            # 결과 파싱 (통합된 파싱 메서드 사용)
+            result_list = self._parse_sql_result_to_dict(result)
             
             logger.info(f"✅ Export: Converted {len(result_list)} rows to JSON")
             return result_list
@@ -395,10 +408,8 @@ class RAGService:
                     sql = (fallback_prompt | self.llm | StrOutputParser()).invoke({})
                     sql = sql.replace("```sql", "").replace("```", "").strip()
                     result = execute_query.invoke(sql)
-                    if result and result != "[]":
-                        import ast
-                        data = ast.literal_eval(result) if result.startswith('[') else eval(result)
-                        return [{"댓글내용": str(r[0]), "작성자": str(r[1]), "위험도": float(r[2]), "카테고리": str(r[3]), "분석시간": str(r[4])} for r in data]
+                    if result:
+                        return self._parse_sql_result_to_dict(result)
                 except:
                     pass
                     
