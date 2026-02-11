@@ -147,10 +147,13 @@ class RAGService:
         
         # 디버깅용 로그 체인 + 결과 캡처
         def log_step(state):
-            logger.info(f"🔍 Generated SQL: {state.get('query')}")
-            logger.info(f"🔍 SQL Result: {state.get('result')}")
-            # 결과를 인스턴스 변수에 저장 (CSV export용)
-            self.last_sql_result = state.get('result')
+            query = state.get('query')
+            result = state.get('result')
+            logger.info(f"🔍 Generated SQL: {query}")
+            logger.info(f"🔍 SQL Result: {str(result)[:200]}...")
+            # 결과를 인스턴스 변수에 저장 (CSV export용 및 디버깅용)
+            self.last_sql_result = result
+            self.last_sql = query
             return state
 
         def final_response(state):
@@ -380,6 +383,15 @@ class RAGService:
                 match = re.search(r"SELECT.*", sql, re.IGNORECASE | re.DOTALL)
                 if match:
                     sql = match.group(0)
+            
+            # LIMIT 강제 조정 (항상 1000개까지 시도)
+            if "LIMIT" in sql.upper():
+                sql = re.sub(r"LIMIT\s+\d+", "LIMIT 1000", sql, flags=re.IGNORECASE)
+            else:
+                if ';' in sql:
+                    sql = sql.replace(';', ' LIMIT 1000;')
+                else:
+                    sql += " LIMIT 1000"
             
             # 세미콜론 이후 설명 텍스트 제거 (단, 첫 번째 세미콜론만)
             if ';' in sql:
