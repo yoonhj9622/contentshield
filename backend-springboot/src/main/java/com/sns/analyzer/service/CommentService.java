@@ -252,15 +252,23 @@ public class CommentService {
      * Python 크롤러 호출
      */
     private List<Map<String, Object>> crawlYoutubeComments(String url) {
+        String callUrl = (aiServiceUrl != null ? aiServiceUrl.trim() : "") + "/crawl/youtube";
         try {
+            // URI 유효성 검사
+            if (!callUrl.startsWith("http://") && !callUrl.startsWith("https://")) {
+                throw new IllegalArgumentException(
+                        "Invalid AI_SERVICE_URL: [" + aiServiceUrl + "]. It must start with http:// or https://");
+            }
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             Map<String, String> request = Map.of("url", url);
             HttpEntity<Map<String, String>> entity = new HttpEntity<>(request, headers);
 
+            System.out.println("[DEBUG] Calling AI Crawler: " + callUrl);
             ResponseEntity<Map> response = restTemplate.exchange(
-                    aiServiceUrl + "/crawl/youtube",
+                    callUrl,
                     HttpMethod.POST,
                     entity,
                     Map.class);
@@ -273,6 +281,7 @@ public class CommentService {
             return List.of();
 
         } catch (Exception e) {
+            System.err.println("[ERROR] YouTube crawling failed for URL: " + callUrl);
             throw new RuntimeException("Crawling failed: " + e.getMessage());
         }
     }

@@ -95,7 +95,14 @@ public class AnalysisService {
      * AI 서비스 호출 (사용자 차단 단어 포함)
      */
     private Map<String, Object> callAIService(String text, List<String> customBlockedWords) {
+        String callUrl = (aiServiceUrl != null ? aiServiceUrl.trim() : "") + "/analyze/text";
         try {
+            // URI 유효성 검사
+            if (!callUrl.startsWith("http://") && !callUrl.startsWith("https://")) {
+                throw new IllegalArgumentException(
+                        "Invalid AI_SERVICE_URL: [" + aiServiceUrl + "]. It must start with http:// or https://");
+            }
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
 
@@ -107,8 +114,9 @@ public class AnalysisService {
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
 
+            System.out.println("[DEBUG] Calling AI Analysis: " + callUrl);
             ResponseEntity<Map> response = restTemplate.exchange(
-                    aiServiceUrl + "/analyze/text",
+                    callUrl,
                     HttpMethod.POST,
                     entity,
                     Map.class);
@@ -118,6 +126,7 @@ public class AnalysisService {
             return body != null ? body : Map.of();
 
         } catch (Exception e) {
+            System.err.println("[ERROR] AI analysis call failed for URL: " + callUrl);
             throw new RuntimeException("AI service call failed: " + e.getMessage());
         }
     }
