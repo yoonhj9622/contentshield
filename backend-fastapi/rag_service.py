@@ -109,8 +109,8 @@ class RAGService:
             | target_llm
             | StrOutputParser()
         )
-        # QuerySQLDataBaseTool의 기본 top_k는 10이므로 상향 조정 필요
-        execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 1000})
+        # QuerySQLDataBaseTool의 top_k를 리포트 생성용으로 적절히 제한 (토큰 절약)
+        execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 50})
         
         answer_prompt = PromptTemplate.from_template(
             """Given the following user question, corresponding SQL query, and SQL result, answer the user question in Korean.
@@ -202,7 +202,7 @@ class RAGService:
         inputs = {
             "question": question, 
             "input": question, 
-            "top_k": 100, # 리포트용 데이터 한도 상향
+            "top_k": 50, # 리포트용 데이터 한도 (Groq 토큰 제한 고려)
             "history": history_str
         }
 
@@ -359,7 +359,7 @@ class RAGService:
                 3. If the question is a general request (summary, show all, list), OMIT the WHERE clause and just return rows.
                 4. ONLY use WHERE clause if the user specifies a clear keyword.
                 5. If it is a channel summary request, DO NOT use WHERE.
-                6. ALWAYS end with `LIMIT 1000`.
+                6. ALWAYS end with `LIMIT 100`.
                 
                 SQL:"""
             )
@@ -372,8 +372,8 @@ class RAGService:
                 | StrOutputParser()
             )
             
-            # QuerySQLDataBaseTool의 기본 top_k는 10이므로 상향 조정 필요
-            execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 1000})
+            # CSV 추출용이므로 채팅 보다는 좀 더 넉넉하게 추출
+            execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 100})
             
             # SQL 생성
             inputs = {"input": question}
@@ -388,14 +388,14 @@ class RAGService:
                 if match:
                     sql = match.group(0)
             
-            # LIMIT 강제 조정 (항상 1000개까지 시도)
+            # LIMIT 강제 조정 (항상 100개까지 시도)
             if "LIMIT" in sql.upper():
-                sql = re.sub(r"LIMIT\s+\d+", "LIMIT 1000", sql, flags=re.IGNORECASE)
+                sql = re.sub(r"LIMIT\s+\d+", "LIMIT 100", sql, flags=re.IGNORECASE)
             else:
                 if ';' in sql:
-                    sql = sql.replace(';', ' LIMIT 1000;')
+                    sql = sql.replace(';', ' LIMIT 100;')
                 else:
-                    sql += " LIMIT 1000"
+                    sql += " LIMIT 100"
             
             # 세미콜론 이후 설명 텍스트 제거 (단, 첫 번째 세미콜론만)
             if ';' in sql:
