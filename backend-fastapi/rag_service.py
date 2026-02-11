@@ -78,13 +78,14 @@ class RAGService:
             GUIDELINES:
             1. **Select Informative Columns**: SELECT `comment_text`, `author`, `toxicity_score`, `category`, `analyzed_at`.
             2. **Instructions vs Search Terms**:
-               - NEVER use words like "요약", "분석", "리스트", "보여줘", "내 채널" in the WHERE clause. These are instructions, not keywords.
-               - If the user says "내 채널의 댓글 요약해줘", your SQL should be: `SELECT ... FROM analysis_results LIMIT 10;` (NO WHERE CLAUSE).
-               - ONLY use WHERE if the user asks for a specific topic (e.g., "스포츠 관련", "정치 관련") or a specific author.
-            3. **Order**: If asked for "bad" or "toxic" comments, use `ORDER BY toxicity_score DESC`.
+               - NEVER use words like "요약", "분석", "리스트", "보여줘", "내 채널" in the WHERE clause.
+               - If the user says "내 채널의 댓글 요약해줘", it means "Show me ALL comments from the table".
+               - **NO WHERE CLAUSE** should be used for general summary/list requests.
+               - ONLY use WHERE if searching for a specific subject (e.g., "about food") or person.
+            3. **Order**: If asked for "bad" or "toxic", use `ORDER BY toxicity_score DESC`.
             4. **Strict Limit**: ALWAYS end with `LIMIT {top_k}`.
             
-            IMPORTANT: Return ONLY the SQL query. Do not explain anything.
+            IMPORTANT: Return ONLY the SQL query.
             
             Only use the following tables:
             {table_info}
@@ -196,7 +197,7 @@ class RAGService:
         inputs = {
             "question": question, 
             "input": question, 
-            "top_k": 10,
+            "top_k": 100, # 리포트용 데이터 한도 상향
             "history": history_str
         }
 
@@ -211,7 +212,8 @@ class RAGService:
             return {
                 "answer": response, 
                 "sources": ["Database (MariaDB)"],
-                "data": raw_data  # CSV export용 원본 데이터
+                "data": raw_data,
+                "generated_sql": getattr(self, "last_sql", "") # 디버깅용
             }
         except Exception as e:
             logger.error(f"SQL Chain failed: {e}")
@@ -349,8 +351,9 @@ class RAGService:
                 1. SELECT ONLY these 5 columns in this exact order: `comment_text`, `author`, `toxicity_score`, `category`, `analyzed_at`.
                 2. DO NOT filter by the question itself. (e.g. If question is '요약해줘', DO NOT use `WHERE comment_text LIKE '%요약해줘%'`)
                 3. If the question is a general request (summary, show all, list), OMIT the WHERE clause and just return rows.
-                4. ONLY use WHERE clause if the user specifies a clear keyword (e.g. 'about sports', 'by John').
-                5. ALWAYS end with `LIMIT 1000`.
+                4. ONLY use WHERE clause if the user specifies a clear keyword.
+                5. If it is a channel summary request, DO NOT use WHERE.
+                6. ALWAYS end with `LIMIT 1000`.
                 
                 SQL:"""
             )
