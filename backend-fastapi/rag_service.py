@@ -39,7 +39,8 @@ class RAGService:
             self.db = SQLDatabase.from_uri(
                 self.db_url, 
                 sample_rows_in_table_info=0,
-                include_tables=['analysis_results', 'comments'] 
+                include_tables=['analysis_results', 'comments'],
+                max_string_length=1000000 # 결과 문자열이 잘리지 않도록 1MB로 설정
             )
             logger.info(f"✅ Connected to Database: {db_name} (Restricted tables)")
         except Exception as e:
@@ -108,7 +109,8 @@ class RAGService:
             | target_llm
             | StrOutputParser()
         )
-        execute_query = QuerySQLDataBaseTool(db=self.db)
+        # QuerySQLDataBaseTool의 기본 top_k는 10이므로 상향 조정 필요
+        execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 1000})
         
         answer_prompt = PromptTemplate.from_template(
             """Given the following user question, corresponding SQL query, and SQL result, answer the user question in Korean.
@@ -315,6 +317,7 @@ class RAGService:
                     "분석시간": at
                 })
             
+            logger.info(f"✅ Parsed {len(result_list)} rows from SQL result")
             return result_list
         except Exception as e:
             logger.error(f"Failed to parse SQL result: {e}")
@@ -369,7 +372,8 @@ class RAGService:
                 | StrOutputParser()
             )
             
-            execute_query = QuerySQLDataBaseTool(db=self.db)
+            # QuerySQLDataBaseTool의 기본 top_k는 10이므로 상향 조정 필요
+            execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 1000})
             
             # SQL 생성
             inputs = {"input": question}
