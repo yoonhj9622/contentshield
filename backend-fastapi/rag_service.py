@@ -154,8 +154,17 @@ class RAGService:
 
         def final_response(state):
             # SQL 결과가 없거나 비어있는 경우 즉시 종료
-            if not state.get("result") or state.get("result") == "[]" or state.get("result") == "":
+            raw_result = state.get("result")
+            if not raw_result or raw_result == "[]" or raw_result == "":
                 return "해당 조건에 맞는 데이터가 없습니다."
+            
+            # AI에게 전달하기 전에 결과 포맷팅 (Decimal, datetime 제거)
+            formatted_data = self._parse_sql_result_to_dict(raw_result)
+            if not formatted_data:
+                return "해당 조건에 맞는 데이터가 없습니다."
+            
+            # 딕셔너리 리스트를 읽기 쉬운 텍스트로 변환
+            clean_text_result = "\n".join([str(row) for row in formatted_data])
             
             # 결과가 있는 경우에만 LLM에게 보고서 생성 요청
             chain = (
@@ -163,7 +172,7 @@ class RAGService:
                 | target_llm
                 | StrOutputParser()
             )
-            return chain.invoke(state)
+            return chain.invoke({**state, "result": clean_text_result})
 
         chain = (
             RunnablePassthrough.assign(query=write_query | clean_sql).assign(
@@ -341,7 +350,7 @@ class RAGService:
                 2. DO NOT filter by the question itself. (e.g. If question is '요약해줘', DO NOT use `WHERE comment_text LIKE '%요약해줘%'`)
                 3. If the question is a general request (summary, show all, list), OMIT the WHERE clause and just return rows.
                 4. ONLY use WHERE clause if the user specifies a clear keyword (e.g. 'about sports', 'by John').
-                5. ALWAYS end with `LIMIT 50`.
+                5. ALWAYS end with `LIMIT 1000`.
                 
                 SQL:"""
             )
