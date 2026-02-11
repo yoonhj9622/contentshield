@@ -76,15 +76,16 @@ class RAGService:
             """You are a MySQL expert. Given an input question and conversation history, create a syntactically correct MySQL query to run.
             
             GUIDELINES:
-            1. **Select Informative Columns**: SELECT `comment_text`, `toxicity_score`, `category`, `analyzed_at`, `author`.
-            2. **Content Search vs Author Search**:
-               - If the user asks for comments **"about"** someone, **"containing"** a word, or **"mentioning"** specific content (e.g., "차은우가 나오는", "욕설이 포함된"), query `comment_text LIKE '%keyword%'`.
-               - ONLY query `author` if the user explicitly says **"written by"**, **"author is"**, or **"created by"** (e.g., "차은우가 쓴", "작성자가 누구").
-            3. **Strict Limit**: **ALWAYS** end your query with `LIMIT {top_k}`. Do NOT return more than {top_k} rows to prevent token errors.
-            4. **Worst/Toxic Cases**: If asking for "worst", "bad", or "toxic", `ORDER BY toxicity_score DESC` and `LIMIT {top_k}`.
+            1. **Select Informative Columns**: SELECT `comment_text`, `author`, `toxicity_score`, `category`, `analyzed_at`.
+            2. **Instructions vs Keywords**:
+               - If the user asks for a **"summary"**, **"analysis"**, or **"list"** (e.g., "요약해줘", "분석해줘", "보여줘"), DO NOT use these words in a `LIKE` clause.
+               - ONLY use `WHERE comment_text LIKE '%keyword%'` if there is a clear subject/topic (e.g., "about pizza", "containing insults").
+               - If the request is general, OMIT the `WHERE` clause for that part.
+            3. **Strict Limit**: **ALWAYS** end your query with `LIMIT {top_k}`.
+            4. **Worst/Toxic Cases**: If asking for "worst", "bad", or "toxic", `ORDER BY toxicity_score DESC`.
             5. **Date/Time**: If asked about "recent", filter by `analyzed_at`.
             
-            IMPORTANT: Return ONLY the SQL query.
+            IMPORTANT: Return ONLY the SQL query. Do not explain.
             
             Only use the following tables:
             {table_info}
@@ -134,8 +135,9 @@ class RAGService:
             ---
             
             **Guidelines:**
-            - IF THE SQL RESULT IS EMPTY (e.g., [] or None), DO NOT generate the report. Just say "해당 조건에 맞는 데이터가 없습니다."
-            - IMPORTANT: Do NOT assume the current date. Use the data provided in SQL Result.
+            - IF THE SQL RESULT IS EMPTY (e.g., [], None, or ""), YOU MUST SAY: "해당 조건에 맞는 데이터가 없습니다."
+            - CRITICAL: NEVER, EVER MAKE UP OR HALLUCINATE DATA. Do not use the sample names like JohnDoe if the SQL result is empty.
+            - Only use the data provided in 'SQL Result'.
             
             Question: {question}
             SQL Query: {query}
