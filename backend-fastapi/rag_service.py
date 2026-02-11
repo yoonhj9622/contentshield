@@ -109,8 +109,8 @@ class RAGService:
             | target_llm
             | StrOutputParser()
         )
-        # QuerySQLDataBaseTool의 top_k를 리포트 생성용으로 적절히 제한 (토큰 절약)
-        execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 50})
+        # QuerySQLDataBaseTool의 top_k를 리포트 생성용으로 최소화 (무료 플랜 토큰 제한 6000 고려)
+        execute_query = QuerySQLDataBaseTool(db=self.db, db_run_kwargs={"top_k": 20})
         
         answer_prompt = PromptTemplate.from_template(
             """Given the following user question, corresponding SQL query, and SQL result, answer the user question in Korean.
@@ -164,13 +164,21 @@ class RAGService:
             if not raw_result or raw_result == "[]" or raw_result == "":
                 return "해당 조건에 맞는 데이터가 없습니다."
             
-            # AI에게 전달하기 전에 결과 포맷팅 (Decimal, datetime 제거)
+            # AI에게 전달하기 전에 결과 포맷팅 (Decimal, datetime 제거 및 텍스트 절사)
             formatted_data = self._parse_sql_result_to_dict(raw_result)
             if not formatted_data:
                 return "해당 조건에 맞는 데이터가 없습니다."
             
+            # 리포트용 데이터는 20개로 최종 제한하고 글자수도 줄임 (토큰 절약)
+            final_data = []
+            for item in formatted_data[:20]:
+                content = item.get("댓글내용", "")
+                if len(content) > 100:
+                    content = content[:100] + "..."
+                final_data.append({**item, "댓글내용": content})
+            
             # 딕셔너리 리스트를 읽기 쉬운 텍스트로 변환
-            clean_text_result = "\n".join([str(row) for row in formatted_data])
+            clean_text_result = "\n".join([str(row) for row in final_data])
             
             # 결과가 있는 경우에만 LLM에게 보고서 생성 요청
             chain = (
@@ -202,7 +210,7 @@ class RAGService:
         inputs = {
             "question": question, 
             "input": question, 
-            "top_k": 50, # 리포트용 데이터 한도 (Groq 토큰 제한 고려)
+            "top_k": 20, # 리포트용 데이터 한도 대폭 축소 (Groq 무료 플랜 대응)
             "history": history_str
         }
 
