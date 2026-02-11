@@ -283,26 +283,32 @@ class RAGService:
         from langchain_community.tools.sql_database.tool import QuerySQLDataBaseTool
         
         try:
-            # Export용 초경량 프롬프트 (토큰 제한 회피)
+            # table_info 가져오기 (정확한 SQL 생성을 위해 필수)
+            table_info = self.db.get_table_info()
+            
+            # Export용 프롬프트 개선 (스키마 정보 포함 및 규칙 강화)
             sql_prompt = PromptTemplate.from_template(
-                """Create a MySQL query for: {input}
+                """You are a MySQL expert. 
+                Given an input question, create a syntactically correct MySQL query to run.
                 
-                SELECT comment_text, author, toxicity_score, category, analyzed_at
-                FROM analysis_results
-                WHERE [your condition based on question]
-                LIMIT 10;
+                Only use the following tables:
+                {table_info}
                 
-                Rules:
-                - For content search: comment_text LIKE '%keyword%'
-                - For author search: author LIKE '%name%'
-                - Always use these 5 columns in order
+                Question: {input}
+                
+                RULES:
+                1. SELECT ONLY these 5 columns in this exact order: `comment_text`, `author`, `toxicity_score`, `category`, `analyzed_at`.
+                2. If the question is about "summarizing" or "showing all" without specific filters, just SELECT with LIMIT.
+                3. For content search: `comment_text LIKE '%keyword%'`.
+                4. For author search: `author LIKE '%name%'`.
+                5. ALWAYS end with `LIMIT 50`.
                 
                 SQL:"""
             )
             
-            # SQL 생성 체인 (table_info 제거로 토큰 절약)
+            # SQL 생성 체인
             write_query = (
-                RunnablePassthrough()
+                RunnablePassthrough.assign(table_info=lambda x: table_info)
                 | sql_prompt
                 | self.llm
                 | StrOutputParser()
@@ -365,6 +371,25 @@ class RAGService:
             
         except Exception as e:
             logger.error(f"Get query results failed: {e}")
+            
+            # Rate Limit (429) 처리 - 한번 더 재시도
+            if "429" in str(e) or "rate_limit" in str(e).lower():
+                import time
+                logger.warning("⚠️ Export Rate limit reached. Retrying in 3s...")
+                time.sleep(3)
+                try:
+                    # 재시도시에는 정말 최소한의 정보로 재시도
+                    fallback_prompt = PromptTemplate.from_template("SELECT comment_text, author, toxicity_score, category, analyzed_at FROM analysis_results LIMIT 10;")
+                    sql = (fallback_prompt | self.llm | StrOutputParser()).invoke({})
+                    sql = sql.replace("```sql", "").replace("```", "").strip()
+                    result = execute_query.invoke(sql)
+                    if result and result != "[]":
+                        import ast
+                        data = ast.literal_eval(result) if result.startswith('[') else eval(result)
+                        return [{"댓글내용": str(r[0]), "작성자": str(r[1]), "위험도": float(r[2]), "카테고리": str(r[3]), "분석시간": str(r[4])} for r in data]
+                except:
+                    pass
+                    
             import traceback
             logger.error(traceback.format_exc())
-            raise
+            return []
