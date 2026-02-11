@@ -8,8 +8,15 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # AI Assistant Proxy (Spring API보다 우선 순위를 위해 위쪽에 배치)
+    location /api/assistant {
+        proxy_pass https://${AI_URL};
+        proxy_ssl_server_name on;
+        proxy_set_header Host ${AI_URL};
+    }
+
     # API Proxy
-    location /api/ {
+    location /api {
         proxy_pass https://${BACKEND_URL};
         proxy_ssl_server_name on;
         proxy_set_header Host ${BACKEND_URL};
@@ -29,5 +36,13 @@ server {
         proxy_pass https://${AI_URL};
         proxy_ssl_server_name on;
         proxy_set_header Host ${AI_URL};
+    }
+
+    # RAG Proxy
+    location /rag {
+        proxy_pass https://${AI_URL};
+        proxy_ssl_server_name on;
+        proxy_set_header Host ${AI_URL};
+        proxy_set_header X-Real-IP $remote_addr;
     }
 }
