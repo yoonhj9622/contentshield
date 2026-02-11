@@ -1,6 +1,6 @@
 // ==================== src/services/analysisService.js ====================
 
-const API_BASE_URL = import.meta.env.VITE_FASTAPI_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_FASTAPI_URL || ''
 const SPRING_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081/api'
 
 // ==================== 🆕 SNS URL 분석 및 통계 (추가된 부분) ====================

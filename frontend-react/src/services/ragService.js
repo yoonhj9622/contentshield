@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// FastAPI 백엔드 주소 (개발 환경)
-const API_URL = 'http://localhost:8000';
+// FastAPI 백엔드 주소 (Nginx 프록시를 위해 상대 경로 사용)
+const API_URL = '';
 
 export const ragService = {
     // 문서 로드 (벡터 DB 생성)
